@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[oc]
+.venv/
+*.egg-info/
+build/
+dist/
+
+# Environment variables (API keys)
+.env
+.env.*
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# DuckDB
+*.duckdb
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
