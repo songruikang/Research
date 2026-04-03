@@ -1,0 +1,107 @@
+[
+  {
+    "id": "Q01",
+    "difficulty": "Easy",
+    "question": "查询所有华为厂商的PE设备，要求运行状态正常。",
+    "implicit_knowledge": "华为→vendor='HUAWEI'；PE设备→role='PE'；运行状态正常→oper_status='UP'",
+    "expected_sql": "SELECT ne_id, ne_name, model, management_ip, loopback_ipv4\nFROM t_network_element\nWHERE vendor = 'HUAWEI' AND role = 'PE' AND oper_status = 'UP';"
+  },
+  {
+    "id": "Q02",
+    "difficulty": "Easy",
+    "question": "统计每个大区有多少个TIER1级别的站点。",
+    "implicit_knowledge": "",
+    "expected_sql": "SELECT region, COUNT(*) AS tier1_count\nFROM t_site\nWHERE tier = 'TIER1'\nGROUP BY region\nORDER BY tier1_count DESC;"
+  },
+  {
+    "id": "Q03",
+    "difficulty": "Easy",
+    "question": "当前有多少条SRv6 Policy处于DOWN状态？",
+    "implicit_knowledge": "SRv6 Policy→t_srv6_policy表",
+    "expected_sql": "SELECT COUNT(*) AS down_policy_count\nFROM t_srv6_policy\nWHERE oper_status = 'DOWN';"
+  },
+  {
+    "id": "Q04",
+    "difficulty": "Medium",
+    "question": "查询北京市所有网元的名称、型号和所在站点名称。",
+    "implicit_knowledge": "地理过滤在t_site上，需JOIN",
+    "expected_sql": "SELECT ne.ne_name, ne.model, ne.role, s.site_name\nFROM t_network_element ne\nJOIN t_site s ON ne.site_id = s.site_id\nWHERE s.city = '北京';"
+  },
+  {
+    "id": "Q05",
+    "difficulty": "Medium",
+    "question": "哪些设备的100GE物理端口数量超过10个？",
+    "implicit_knowledge": "100GE物理端口→phy_type='100GE' AND if_type='PHYSICAL'",
+    "expected_sql": "SELECT ne.ne_name, ne.model, COUNT(*) AS port_100ge_count\nFROM t_network_element ne\nJOIN t_interface i ON ne.ne_id = i.ne_id\nWHERE i.phy_type = '100GE' AND i.if_type = 'PHYSICAL'\nGROUP BY ne.ne_name, ne.model\nHAVING COUNT(*) > 10\nORDER BY port_100ge_count DESC;"
+  },
+  {
+    "id": "Q06",
+    "difficulty": "Medium",
+    "question": "查询使用SRv6 TE承载的所有L3VPN业务及其关联的PE设备名称。",
+    "implicit_knowledge": "SRv6 TE承载→underlay_type='SRV6_TE'；需经过vpn_pe_binding桥接表",
+    "expected_sql": "SELECT v.vpn_name, v.customer_name, v.service_level,\n       ne.ne_name AS pe_name, ne.management_ip\nFROM t_l3vpn_service v\nJOIN t_vpn_pe_binding b ON v.vpn_id = b.vpn_id\nJOIN t_network_element ne ON b.ne_id = ne.ne_id\nWHERE v.underlay_type = 'SRV6_TE' AND v.admin_status = 'ACTIVE';"
+  },
+  {
+    "id": "Q07",
+    "difficulty": "Medium",
+    "question": "查询过去24小时CPU平均利用率超过80%的网元。",
+    "implicit_knowledge": "时间范围理解；OLTP+OLAP JOIN",
+    "expected_sql": "SELECT ne.ne_name, ne.model, ne.role,\n       AVG(k.cpu_usage_avg_pct) AS avg_cpu,\n       MAX(k.cpu_usage_max_pct) AS peak_cpu\nFROM t_ne_perf_kpi k\nJOIN t_network_element ne ON k.ne_id = ne.ne_id\nWHERE k.collect_time >= NOW() - INTERVAL '24 hours'\nGROUP BY ne.ne_name, ne.model, ne.role\nHAVING AVG(k.cpu_usage_avg_pct) > 80\nORDER BY avg_cpu DESC;"
+  },
+  {
+    "id": "Q08",
+    "difficulty": "Hard",
+    "question": "找出GOLD级别VPN业务中，隧道实测时延超过SLA要求的记录。",
+    "implicit_knowledge": "需关联VPN→隧道→隧道KPI；SLA阈值在t_l3vpn_service.max_latency_ms上",
+    "expected_sql": "SELECT v.vpn_name, v.max_latency_ms AS sla_limit,\n       t.tunnel_name, tp.latency_avg_ms AS actual_latency,\n       ne_s.ne_name AS source, ne_d.ne_name AS dest\nFROM t_l3vpn_service v\nJOIN t_tunnel t ON t.associated_vpn_ids LIKE CONCAT('%', v.vpn_id, '%')\nJOIN t_tunnel_perf_kpi tp ON t.tunnel_id = tp.tunnel_id\nJOIN t_network_element ne_s ON t.source_ne_id = ne_s.ne_id\nJOIN t_network_element ne_d ON t.dest_ne_id = ne_d.ne_id\nWHERE v.service_level = 'GOLD' AND v.admin_status = 'ACTIVE'\n  AND tp.collect_time = (SELECT MAX(collect_time) FROM t_tunnel_perf_kpi WHERE tunnel_id = t.tunnel_id)\n  AND tp.latency_avg_ms > v.max_latency_ms;"
+  },
+  {
+    "id": "Q09",
+    "difficulty": "Hard",
+    "question": "统计每台PE设备上所有物理接口的带宽利用率分布（空闲<30%/正常30-70%/繁忙70-90%/过载>90%），只看最新一个采集周期。",
+    "implicit_knowledge": "",
+    "expected_sql": "WITH latest AS (SELECT MAX(collect_time) AS t FROM t_interface_perf_kpi)\nSELECT ne.ne_name,\n  COUNT(CASE WHEN k.out_bandwidth_usage_pct < 30 THEN 1 END) AS idle,\n  COUNT(CASE WHEN k.out_bandwidth_usage_pct BETWEEN 30 AND 70 THEN 1 END) AS normal,\n  COUNT(CASE WHEN k.out_bandwidth_usage_pct BETWEEN 70 AND 90 THEN 1 END) AS busy,\n  COUNT(CASE WHEN k.out_bandwidth_usage_pct > 90 THEN 1 END) AS overload\nFROM t_interface_perf_kpi k\nJOIN t_interface i ON k.if_id = i.if_id\nJOIN t_network_element ne ON k.ne_id = ne.ne_id\nCROSS JOIN latest l\nWHERE k.collect_time = l.t AND ne.role = 'PE' AND i.if_type = 'PHYSICAL'\nGROUP BY ne.ne_name\nORDER BY overload DESC;"
+  },
+  {
+    "id": "Q10",
+    "difficulty": "Hard",
+    "question": "查看过去7天华北区域PE设备的每日平均CPU利用率趋势及环比变化。",
+    "implicit_knowledge": "华北区域→region='华北'",
+    "expected_sql": "WITH daily AS (\n  SELECT DATE(k.collect_time) AS day, AVG(k.cpu_usage_avg_pct) AS avg_cpu\n  FROM t_ne_perf_kpi k\n  JOIN t_network_element ne ON k.ne_id = ne.ne_id\n  JOIN t_site s ON ne.site_id = s.site_id\n  WHERE s.region = '华北' AND ne.role = 'PE'\n    AND k.collect_time >= CURRENT_DATE - INTERVAL '7 days'\n  GROUP BY DATE(k.collect_time)\n)\nSELECT day, ROUND(avg_cpu, 2) AS avg_cpu,\n       ROUND(avg_cpu - LAG(avg_cpu) OVER (ORDER BY day), 2) AS change\nFROM daily ORDER BY day;"
+  },
+  {
+    "id": "Q11",
+    "difficulty": "Extra Hard",
+    "question": "找出SLA违规率最高的前5个VPN客户，统计每个客户的VPN数量、总违规次数和违规率（最近30天）。",
+    "implicit_knowledge": "",
+    "expected_sql": "WITH stats AS (\n  SELECT v.customer_id, v.customer_name,\n    COUNT(DISTINCT v.vpn_id) AS vpn_count,\n    COUNT(sk.kpi_id) AS total_samples,\n    SUM(CASE WHEN sk.sla_overall_met = FALSE THEN 1 ELSE 0 END) AS violations\n  FROM t_l3vpn_service v\n  JOIN t_vpn_sla_kpi sk ON v.vpn_id = sk.vpn_id\n  WHERE sk.collect_time >= CURRENT_DATE - INTERVAL '30 days'\n    AND v.admin_status = 'ACTIVE'\n  GROUP BY v.customer_id, v.customer_name\n)\nSELECT customer_name, vpn_count, violations, total_samples,\n  ROUND(violations * 100.0 / NULLIF(total_samples, 0), 2) AS violation_rate_pct\nFROM stats WHERE total_samples > 0\nORDER BY violation_rate_pct DESC LIMIT 5;"
+  },
+  {
+    "id": "Q12",
+    "difficulty": "Extra Hard",
+    "question": "找出所有'单点故障'链路——两个站点之间只有一条物理链路、且该链路承载了GOLD级别VPN业务。",
+    "implicit_knowledge": "单点故障需推断为站点间链路数=1；链路→NE→VPN的间接关联",
+    "expected_sql": "WITH site_pair AS (\n  SELECT LEAST(a_site_id, z_site_id) AS s1,\n         GREATEST(a_site_id, z_site_id) AS s2,\n         COUNT(*) AS link_cnt, ARRAY_AGG(link_id) AS links\n  FROM t_physical_link WHERE oper_status = 'UP'\n  GROUP BY LEAST(a_site_id, z_site_id), GREATEST(a_site_id, z_site_id)\n  HAVING COUNT(*) = 1\n),\ngold_links AS (\n  SELECT DISTINCT pl.link_id\n  FROM t_physical_link pl\n  JOIN t_vpn_pe_binding b ON b.ne_id = pl.a_ne_id\n  JOIN t_l3vpn_service v ON b.vpn_id = v.vpn_id\n  WHERE v.service_level IN ('GOLD','PLATINUM') AND v.admin_status = 'ACTIVE'\n)\nSELECT pl.link_name, sa.site_name AS site_a, sz.site_name AS site_b,\n       pl.bandwidth_mbps, pl.distance_km\nFROM site_pair sp\nJOIN t_physical_link pl ON pl.link_id = ANY(sp.links)\nJOIN t_site sa ON sp.s1 = sa.site_id\nJOIN t_site sz ON sp.s2 = sz.site_id\nWHERE pl.link_id IN (SELECT link_id FROM gold_links);"
+  },
+  {
+    "id": "Q13",
+    "difficulty": "Medium",
+    "question": "哪些PE已经使能了SRv6但还没有创建任何SRv6 Policy？",
+    "implicit_knowledge": "",
+    "expected_sql": "SELECT ne.ne_name, ne.model, ne.srv6_locator\nFROM t_network_element ne\nWHERE ne.srv6_enabled = TRUE AND ne.role = 'PE'\n  AND NOT EXISTS (SELECT 1 FROM t_srv6_policy sp WHERE sp.source_ne_id = ne.ne_id);"
+  },
+  {
+    "id": "Q14",
+    "difficulty": "Hard",
+    "question": "对比上周和本周各站点平均接口带宽利用率，找出增长超过20个百分点的站点。",
+    "implicit_knowledge": "",
+    "expected_sql": "WITH weekly AS (\n  SELECT s.site_id, s.site_name,\n    CASE WHEN k.collect_time >= CURRENT_DATE - 7 THEN 'THIS' ELSE 'LAST' END AS wk,\n    AVG(k.out_bandwidth_usage_pct) AS avg_bw\n  FROM t_interface_perf_kpi k\n  JOIN t_network_element ne ON k.ne_id = ne.ne_id\n  JOIN t_site s ON ne.site_id = s.site_id\n  WHERE k.collect_time >= CURRENT_DATE - 14\n  GROUP BY s.site_id, s.site_name,\n    CASE WHEN k.collect_time >= CURRENT_DATE - 7 THEN 'THIS' ELSE 'LAST' END\n)\nSELECT tw.site_name,\n  ROUND(lw.avg_bw, 2) AS last_week, ROUND(tw.avg_bw, 2) AS this_week,\n  ROUND(tw.avg_bw - lw.avg_bw, 2) AS increase\nFROM weekly tw JOIN weekly lw ON tw.site_id = lw.site_id\nWHERE tw.wk = 'THIS' AND lw.wk = 'LAST' AND (tw.avg_bw - lw.avg_bw) > 20\nORDER BY increase DESC;"
+  },
+  {
+    "id": "Q15",
+    "difficulty": "Extra Hard",
+    "question": "为每条GOLD级VPN业务计算健康评分（时延达标+25分，抖动达标+25分，丢包达标+25分，可用率达标+25分），输出评分低于75分的业务。",
+    "implicit_knowledge": "",
+    "expected_sql": "WITH health AS (\n  SELECT v.vpn_id, v.vpn_name, v.customer_name,\n    AVG(CASE WHEN sk.sla_latency_met THEN 25 ELSE 0 END) +\n    AVG(CASE WHEN sk.sla_jitter_met THEN 25 ELSE 0 END) +\n    AVG(CASE WHEN sk.sla_loss_met THEN 25 ELSE 0 END) +\n    AVG(CASE WHEN sk.sla_availability_met THEN 25 ELSE 0 END) AS score,\n    AVG(sk.e2e_latency_avg_ms) AS lat, AVG(sk.e2e_packet_loss_pct) AS loss,\n    AVG(sk.availability_pct) AS avail\n  FROM t_l3vpn_service v\n  JOIN t_vpn_sla_kpi sk ON v.vpn_id = sk.vpn_id\n  WHERE v.service_level = 'GOLD' AND v.admin_status = 'ACTIVE'\n    AND sk.collect_time >= CURRENT_DATE - 7\n  GROUP BY v.vpn_id, v.vpn_name, v.customer_name\n)\nSELECT vpn_name, customer_name, ROUND(score, 1) AS health_score,\n  ROUND(lat, 2) AS avg_latency_ms, ROUND(loss, 4) AS avg_loss_pct,\n  ROUND(avail, 2) AS availability_pct\nFROM health WHERE score < 75 ORDER BY score;"
+  }
+]

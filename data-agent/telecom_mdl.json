@@ -1,0 +1,4488 @@
+{
+  "catalog": "telecom_nms",
+  "schema": "public",
+  "dataSource": "DUCKDB",
+  "models": [
+    {
+      "name": "t_site",
+      "tableReference": {
+        "table": "t_site"
+      },
+      "columns": [
+        {
+          "name": "site_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "site_id",
+          "properties": {
+            "displayName": "Site ID",
+            "description": "站点唯一标识"
+          }
+        },
+        {
+          "name": "site_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "site_name",
+          "properties": {
+            "displayName": "Site Name",
+            "description": "站点名称"
+          }
+        },
+        {
+          "name": "site_code",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "site_code",
+          "properties": {
+            "displayName": "Site Code",
+            "description": "站点编码（全局唯一简码）"
+          }
+        },
+        {
+          "name": "site_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "site_type",
+          "properties": {
+            "displayName": "Site Type",
+            "description": "站点类型：DC(数据中心)、POP(接入点)、CO(中心机房)、COLO(托管)、EDGE(边缘)。取值: DC;POP;CO;COLO;EDGE"
+          }
+        },
+        {
+          "name": "region",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "region",
+          "properties": {
+            "displayName": "Region",
+            "description": "所属大区（用于区域维度聚合）"
+          }
+        },
+        {
+          "name": "province",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "province",
+          "properties": {
+            "displayName": "Province",
+            "description": "省份"
+          }
+        },
+        {
+          "name": "city",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "city",
+          "properties": {
+            "displayName": "City",
+            "description": "城市"
+          }
+        },
+        {
+          "name": "address",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "address",
+          "properties": {
+            "displayName": "Address",
+            "description": "详细地址"
+          }
+        },
+        {
+          "name": "longitude",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "longitude",
+          "properties": {
+            "displayName": "Longitude",
+            "description": "经度（WGS84）"
+          }
+        },
+        {
+          "name": "latitude",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "latitude",
+          "properties": {
+            "displayName": "Latitude",
+            "description": "纬度（WGS84）"
+          }
+        },
+        {
+          "name": "tier",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "tier",
+          "properties": {
+            "displayName": "Tier",
+            "description": "站点等级：TIER1为核心枢纽，TIER3为末梢接入。取值: TIER1;TIER2;TIER3"
+          }
+        },
+        {
+          "name": "total_rack_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "total_rack_count",
+          "properties": {
+            "displayName": "Total Rack Count",
+            "description": "该站点总机柜数量"
+          }
+        },
+        {
+          "name": "used_rack_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "used_rack_count",
+          "properties": {
+            "displayName": "Used Rack Count",
+            "description": "已使用的机柜数量"
+          }
+        },
+        {
+          "name": "power_capacity_kw",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "power_capacity_kw",
+          "properties": {
+            "displayName": "Power Capacity (kW)",
+            "description": "站点总供电容量"
+          }
+        },
+        {
+          "name": "cooling_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "cooling_type",
+          "properties": {
+            "displayName": "Cooling Type",
+            "description": "制冷方式。取值: AIR;LIQUID;HYBRID"
+          }
+        },
+        {
+          "name": "operator",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "operator",
+          "properties": {
+            "displayName": "Operator",
+            "description": "站点运营商或承建方"
+          }
+        },
+        {
+          "name": "contact_person",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "contact_person",
+          "properties": {
+            "displayName": "Contact Person",
+            "description": "站点联系人"
+          }
+        },
+        {
+          "name": "contact_phone",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "contact_phone",
+          "properties": {
+            "displayName": "Contact Phone",
+            "description": "联系电话"
+          }
+        },
+        {
+          "name": "commissioning_date",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "commissioning_date",
+          "properties": {
+            "displayName": "Commissioning Date",
+            "description": "站点投产日期"
+          }
+        },
+        {
+          "name": "contract_expire_date",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "contract_expire_date",
+          "properties": {
+            "displayName": "Contract Expire Date",
+            "description": "机房租赁合同到期日"
+          }
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "status",
+          "properties": {
+            "displayName": "Status",
+            "description": "站点状态。取值: ACTIVE;DECOMMISSIONED;PLANNED"
+          }
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "description",
+          "properties": {
+            "displayName": "Description",
+            "description": "备注"
+          }
+        }
+      ],
+      "primaryKey": "site_id",
+      "properties": {
+        "displayName": "t_site",
+        "description": "站点/机房表 - 物理机房、POP点的地理位置和基础设施信息"
+      }
+    },
+    {
+      "name": "t_network_element",
+      "tableReference": {
+        "table": "t_network_element"
+      },
+      "columns": [
+        {
+          "name": "ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "ne_id",
+          "properties": {
+            "displayName": "Network Element ID",
+            "description": "网元唯一标识"
+          }
+        },
+        {
+          "name": "ne_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "ne_name",
+          "properties": {
+            "displayName": "NE Name",
+            "description": "网元名称（通常含地域和角色信息）"
+          }
+        },
+        {
+          "name": "ne_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "ne_type",
+          "properties": {
+            "displayName": "NE Type",
+            "description": "设备硬件类型。取值: ROUTER;SWITCH;FIREWALL;OTN"
+          }
+        },
+        {
+          "name": "vendor",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "vendor",
+          "properties": {
+            "displayName": "Vendor",
+            "description": "设备厂商。取值: HUAWEI;CISCO;ZTE;JUNIPER"
+          }
+        },
+        {
+          "name": "model",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "model",
+          "properties": {
+            "displayName": "Model",
+            "description": "设备型号"
+          }
+        },
+        {
+          "name": "software_version",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "software_version",
+          "properties": {
+            "displayName": "Software Version",
+            "description": "设备操作系统版本"
+          }
+        },
+        {
+          "name": "patch_version",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "patch_version",
+          "properties": {
+            "displayName": "Patch Version",
+            "description": "热补丁版本"
+          }
+        },
+        {
+          "name": "role",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "role",
+          "properties": {
+            "displayName": "Role",
+            "description": "网元在IP骨干网中的角色：PE(Provider Edge直连客户承载VPN)、P(骨干转发)、CE(客户侧)、RR(路由反射器)、ASBR(域边界)。取值: PE;P;CE;RR;ASBR;ABR"
+          }
+        },
+        {
+          "name": "management_ip",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "management_ip",
+          "properties": {
+            "displayName": "Management IP",
+            "description": "设备带外管理IP地址（SSH/NETCONF登录用）"
+          }
+        },
+        {
+          "name": "loopback_ipv4",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "loopback_ipv4",
+          "properties": {
+            "displayName": "Loopback IPv4",
+            "description": "Loopback0接口IPv4地址（通常作为Router-ID和BGP邻居地址）"
+          }
+        },
+        {
+          "name": "loopback_ipv6",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "loopback_ipv6",
+          "properties": {
+            "displayName": "Loopback IPv6",
+            "description": "Loopback0接口IPv6地址（SRv6场景关联Locator）"
+          }
+        },
+        {
+          "name": "router_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "router_id",
+          "properties": {
+            "displayName": "Router-ID",
+            "description": "OSPF/BGP的Router-ID（通常等于loopback_ipv4）"
+          }
+        },
+        {
+          "name": "as_number",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "as_number",
+          "properties": {
+            "displayName": "AS Number",
+            "description": "所属BGP自治系统号"
+          }
+        },
+        {
+          "name": "isis_system_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "isis_system_id",
+          "properties": {
+            "displayName": "IS-IS System ID",
+            "description": "IS-IS协议系统标识符（6字节点分十进制）"
+          }
+        },
+        {
+          "name": "isis_area_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "isis_area_id",
+          "properties": {
+            "displayName": "IS-IS Area ID",
+            "description": "IS-IS区域标识"
+          }
+        },
+        {
+          "name": "srv6_locator",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "srv6_locator",
+          "properties": {
+            "displayName": "SRv6 Locator",
+            "description": "SRv6 Locator前缀，标识设备在SRv6网络中的可达地址段"
+          }
+        },
+        {
+          "name": "mpls_enabled",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "mpls_enabled",
+          "properties": {
+            "displayName": "MPLS Enabled",
+            "description": "是否使能MPLS转发"
+          }
+        },
+        {
+          "name": "srv6_enabled",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "srv6_enabled",
+          "properties": {
+            "displayName": "SRv6 Enabled",
+            "description": "是否使能SRv6(Segment Routing over IPv6)"
+          }
+        },
+        {
+          "name": "netconf_enabled",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "netconf_enabled",
+          "properties": {
+            "displayName": "NETCONF Enabled",
+            "description": "是否使能NETCONF协议（自动化配置管理）"
+          }
+        },
+        {
+          "name": "telemetry_enabled",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "telemetry_enabled",
+          "properties": {
+            "displayName": "Telemetry Enabled",
+            "description": "是否使能Telemetry流式遥测（性能数据实时上报）"
+          }
+        },
+        {
+          "name": "site_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "site_id",
+          "properties": {
+            "displayName": "Site ID",
+            "description": "所属站点ID"
+          }
+        },
+        {
+          "name": "rack_position",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "rack_position",
+          "properties": {
+            "displayName": "Rack Position",
+            "description": "机柜位置"
+          }
+        },
+        {
+          "name": "serial_number",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "serial_number",
+          "properties": {
+            "displayName": "Serial Number",
+            "description": "设备序列号（厂商出厂编号）"
+          }
+        },
+        {
+          "name": "asset_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "asset_id",
+          "properties": {
+            "displayName": "Asset ID",
+            "description": "企业内部资产编号"
+          }
+        },
+        {
+          "name": "commissioning_date",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "commissioning_date",
+          "properties": {
+            "displayName": "Commissioning Date",
+            "description": "设备上线日期"
+          }
+        },
+        {
+          "name": "maintenance_expire",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "maintenance_expire",
+          "properties": {
+            "displayName": "Maintenance Expire",
+            "description": "维保合同到期日"
+          }
+        },
+        {
+          "name": "admin_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "admin_status",
+          "properties": {
+            "displayName": "Admin Status",
+            "description": "管理状态（运维人员手动设置）。取值: UP;DOWN;TESTING"
+          }
+        },
+        {
+          "name": "oper_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "oper_status",
+          "properties": {
+            "displayName": "Oper Status",
+            "description": "运行状态（系统自动检测）。取值: UP;DOWN;DEGRADED"
+          }
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "description",
+          "properties": {
+            "displayName": "Description",
+            "description": "备注"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "创建时间"
+          }
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "updated_at",
+          "properties": {
+            "displayName": "Updated At",
+            "description": "更新时间"
+          }
+        }
+      ],
+      "primaryKey": "ne_id",
+      "properties": {
+        "displayName": "t_network_element",
+        "description": "网元/设备表 - 路由器、交换机等网络设备信息"
+      }
+    },
+    {
+      "name": "t_board",
+      "tableReference": {
+        "table": "t_board"
+      },
+      "columns": [
+        {
+          "name": "board_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "board_id",
+          "properties": {
+            "displayName": "Board ID",
+            "description": "单板唯一标识"
+          }
+        },
+        {
+          "name": "ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "ne_id",
+          "properties": {
+            "displayName": "NE ID",
+            "description": "所属网元ID"
+          }
+        },
+        {
+          "name": "slot_number",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "slot_number",
+          "properties": {
+            "displayName": "Slot Number",
+            "description": "槽位号（板卡在机框中的物理位置）"
+          }
+        },
+        {
+          "name": "board_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "board_type",
+          "properties": {
+            "displayName": "Board Type",
+            "description": "单板类型：MPU(主控板)、LPU(业务线卡)、SFU(交换网板)、FAN(风扇)、PWR(电源)。取值: MPU;LPU;SFU;FAN;PWR"
+          }
+        },
+        {
+          "name": "board_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "board_name",
+          "properties": {
+            "displayName": "Board Name",
+            "description": "单板型号名称"
+          }
+        },
+        {
+          "name": "hardware_version",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "hardware_version",
+          "properties": {
+            "displayName": "Hardware Version",
+            "description": "硬件版本"
+          }
+        },
+        {
+          "name": "firmware_version",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "firmware_version",
+          "properties": {
+            "displayName": "Firmware Version",
+            "description": "固件版本"
+          }
+        },
+        {
+          "name": "serial_number",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "serial_number",
+          "properties": {
+            "displayName": "Serial Number",
+            "description": "单板序列号"
+          }
+        },
+        {
+          "name": "port_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "port_count",
+          "properties": {
+            "displayName": "Port Count",
+            "description": "该单板提供的端口数量"
+          }
+        },
+        {
+          "name": "port_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "port_type",
+          "properties": {
+            "displayName": "Port Type",
+            "description": "端口物理类型。取值: 100GE;400GE;10GE"
+          }
+        },
+        {
+          "name": "forwarding_capacity_gbps",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "forwarding_capacity_gbps",
+          "properties": {
+            "displayName": "Forwarding Capacity (Gbps)",
+            "description": "单板转发处理能力"
+          }
+        },
+        {
+          "name": "memory_total_mb",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "memory_total_mb",
+          "properties": {
+            "displayName": "Memory Total (MB)",
+            "description": "单板内存总量"
+          }
+        },
+        {
+          "name": "temperature_threshold",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "temperature_threshold",
+          "properties": {
+            "displayName": "Temperature Threshold (°C)",
+            "description": "温度告警阈值"
+          }
+        },
+        {
+          "name": "power_consumption_w",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "power_consumption_w",
+          "properties": {
+            "displayName": "Power Consumption (W)",
+            "description": "额定功耗"
+          }
+        },
+        {
+          "name": "admin_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "admin_status",
+          "properties": {
+            "displayName": "Admin Status",
+            "description": "管理状态。取值: UP;DOWN;OFFLINE"
+          }
+        },
+        {
+          "name": "oper_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "oper_status",
+          "properties": {
+            "displayName": "Oper Status",
+            "description": "运行状态。取值: UP;DOWN;FAULT"
+          }
+        },
+        {
+          "name": "install_date",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "install_date",
+          "properties": {
+            "displayName": "Install Date",
+            "description": "板卡安装日期"
+          }
+        },
+        {
+          "name": "last_reboot_time",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "last_reboot_time",
+          "properties": {
+            "displayName": "Last Reboot Time",
+            "description": "最近重启时间"
+          }
+        },
+        {
+          "name": "uptime_hours",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "uptime_hours",
+          "properties": {
+            "displayName": "Uptime (hours)",
+            "description": "累计运行时长"
+          }
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "description",
+          "properties": {
+            "displayName": "Description",
+            "description": "备注"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "创建时间"
+          }
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "updated_at",
+          "properties": {
+            "displayName": "Updated At",
+            "description": "更新时间"
+          }
+        }
+      ],
+      "primaryKey": "board_id",
+      "properties": {
+        "displayName": "t_board",
+        "description": "单板表 - 设备内的线卡、主控板等板卡信息"
+      }
+    },
+    {
+      "name": "t_interface",
+      "tableReference": {
+        "table": "t_interface"
+      },
+      "columns": [
+        {
+          "name": "if_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "if_id",
+          "properties": {
+            "displayName": "Interface ID",
+            "description": "接口唯一标识"
+          }
+        },
+        {
+          "name": "ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "ne_id",
+          "properties": {
+            "displayName": "NE ID",
+            "description": "所属网元ID"
+          }
+        },
+        {
+          "name": "board_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "board_id",
+          "properties": {
+            "displayName": "Board ID",
+            "description": "所属单板ID（物理口有值逻辑口可空）"
+          }
+        },
+        {
+          "name": "if_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "if_name",
+          "properties": {
+            "displayName": "Interface Name",
+            "description": "接口名称（设备标准命名），对应YANG interface name和SNMP ifName"
+          }
+        },
+        {
+          "name": "if_index",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "if_index",
+          "properties": {
+            "displayName": "ifIndex",
+            "description": "SNMP接口索引号，每接口唯一正整数，重启后应保持稳定"
+          }
+        },
+        {
+          "name": "if_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "if_type",
+          "properties": {
+            "displayName": "Interface Type",
+            "description": "接口逻辑类型：PHYSICAL(物理口)、LOOPBACK、VLANIF、ETH-TRUNK(聚合口)、TUNNEL、NULL。取值: PHYSICAL;ETH-TRUNK;LOOPBACK;VLANIF;TUNNEL"
+          }
+        },
+        {
+          "name": "phy_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "phy_type",
+          "properties": {
+            "displayName": "Physical Type",
+            "description": "物理端口速率类型（仅物理口有值）。取值: GE;10GE;25GE;100GE;400GE"
+          }
+        },
+        {
+          "name": "speed_mbps",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "speed_mbps",
+          "properties": {
+            "displayName": "Speed (Mbps)",
+            "description": "接口协商速率"
+          }
+        },
+        {
+          "name": "mtu",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "mtu",
+          "properties": {
+            "displayName": "MTU",
+            "description": "最大传输单元"
+          }
+        },
+        {
+          "name": "ipv4_address",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "ipv4_address",
+          "properties": {
+            "displayName": "IPv4 Address",
+            "description": "接口IPv4地址"
+          }
+        },
+        {
+          "name": "ipv4_mask",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "ipv4_mask",
+          "properties": {
+            "displayName": "IPv4 Mask",
+            "description": "IPv4子网掩码"
+          }
+        },
+        {
+          "name": "ipv6_address",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "ipv6_address",
+          "properties": {
+            "displayName": "IPv6 Address",
+            "description": "接口IPv6地址"
+          }
+        },
+        {
+          "name": "ipv6_prefix_len",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "ipv6_prefix_len",
+          "properties": {
+            "displayName": "IPv6 Prefix Length",
+            "description": "IPv6前缀长度"
+          }
+        },
+        {
+          "name": "mac_address",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "mac_address",
+          "properties": {
+            "displayName": "MAC Address",
+            "description": "接口MAC地址"
+          }
+        },
+        {
+          "name": "vlan_id",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "vlan_id",
+          "properties": {
+            "displayName": "VLAN ID",
+            "description": "接口关联的VLAN标识"
+          }
+        },
+        {
+          "name": "vrf_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "vrf_name",
+          "properties": {
+            "displayName": "VRF Name",
+            "description": "接口绑定的VPN路由转发实例名称"
+          }
+        },
+        {
+          "name": "trunk_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "trunk_id",
+          "properties": {
+            "displayName": "Trunk ID",
+            "description": "所属Eth-Trunk聚合组ID（仅成员口有值）"
+          }
+        },
+        {
+          "name": "trunk_member_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "trunk_member_count",
+          "properties": {
+            "displayName": "Trunk Member Count",
+            "description": "Trunk聚合组成员口数量（仅Trunk主口有值）"
+          }
+        },
+        {
+          "name": "isis_enabled",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "isis_enabled",
+          "properties": {
+            "displayName": "IS-IS Enabled",
+            "description": "该接口是否使能IS-IS路由协议"
+          }
+        },
+        {
+          "name": "isis_cost",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "isis_cost",
+          "properties": {
+            "displayName": "IS-IS Cost",
+            "description": "IS-IS接口开销值，值越小路径优先级越高"
+          }
+        },
+        {
+          "name": "ospf_enabled",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "ospf_enabled",
+          "properties": {
+            "displayName": "OSPF Enabled",
+            "description": "该接口是否使能OSPF路由协议"
+          }
+        },
+        {
+          "name": "bfd_enabled",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "bfd_enabled",
+          "properties": {
+            "displayName": "BFD Enabled",
+            "description": "是否使能BFD(双向转发检测)用于快速链路故障检测"
+          }
+        },
+        {
+          "name": "qos_profile",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "qos_profile",
+          "properties": {
+            "displayName": "QoS Profile",
+            "description": "接口应用的QoS策略模板名称"
+          }
+        },
+        {
+          "name": "admin_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "admin_status",
+          "properties": {
+            "displayName": "Admin Status",
+            "description": "接口管理状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "oper_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "oper_status",
+          "properties": {
+            "displayName": "Oper Status",
+            "description": "接口运行状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "last_change_time",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "last_change_time",
+          "properties": {
+            "displayName": "Last Change Time",
+            "description": "接口最近一次状态变更时间"
+          }
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "description",
+          "properties": {
+            "displayName": "Description",
+            "description": "接口描述，通常标注对端信息"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "创建时间"
+          }
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "updated_at",
+          "properties": {
+            "displayName": "Updated At",
+            "description": "更新时间"
+          }
+        }
+      ],
+      "primaryKey": "if_id",
+      "properties": {
+        "displayName": "t_interface",
+        "description": "接口表 - 物理口、逻辑口、Trunk等接口信息"
+      }
+    },
+    {
+      "name": "t_physical_link",
+      "tableReference": {
+        "table": "t_physical_link"
+      },
+      "columns": [
+        {
+          "name": "link_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "link_id",
+          "properties": {
+            "displayName": "Link ID",
+            "description": "链路唯一标识"
+          }
+        },
+        {
+          "name": "link_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "link_name",
+          "properties": {
+            "displayName": "Link Name",
+            "description": "链路命名"
+          }
+        },
+        {
+          "name": "link_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "link_type",
+          "properties": {
+            "displayName": "Link Type",
+            "description": "链路介质类型。取值: FIBER;COPPER;MICROWAVE"
+          }
+        },
+        {
+          "name": "a_ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "a_ne_id",
+          "properties": {
+            "displayName": "A-End NE ID",
+            "description": "A端网元ID"
+          }
+        },
+        {
+          "name": "a_if_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "a_if_id",
+          "properties": {
+            "displayName": "A-End Interface ID",
+            "description": "A端接口ID"
+          }
+        },
+        {
+          "name": "a_site_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "a_site_id",
+          "properties": {
+            "displayName": "A-End Site ID",
+            "description": "A端站点ID"
+          }
+        },
+        {
+          "name": "z_ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "z_ne_id",
+          "properties": {
+            "displayName": "Z-End NE ID",
+            "description": "Z端网元ID"
+          }
+        },
+        {
+          "name": "z_if_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "z_if_id",
+          "properties": {
+            "displayName": "Z-End Interface ID",
+            "description": "Z端接口ID"
+          }
+        },
+        {
+          "name": "z_site_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "z_site_id",
+          "properties": {
+            "displayName": "Z-End Site ID",
+            "description": "Z端站点ID"
+          }
+        },
+        {
+          "name": "bandwidth_mbps",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "bandwidth_mbps",
+          "properties": {
+            "displayName": "Bandwidth (Mbps)",
+            "description": "链路带宽容量"
+          }
+        },
+        {
+          "name": "distance_km",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "distance_km",
+          "properties": {
+            "displayName": "Distance (km)",
+            "description": "链路物理距离"
+          }
+        },
+        {
+          "name": "latency_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "latency_ms",
+          "properties": {
+            "displayName": "Inherent Latency (ms)",
+            "description": "链路固有传播时延（光纤约5μs/km）"
+          }
+        },
+        {
+          "name": "fiber_core_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "fiber_core_count",
+          "properties": {
+            "displayName": "Fiber Core Count",
+            "description": "光纤芯数"
+          }
+        },
+        {
+          "name": "wavelength_nm",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "wavelength_nm",
+          "properties": {
+            "displayName": "Wavelength (nm)",
+            "description": "使用波长"
+          }
+        },
+        {
+          "name": "cable_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "cable_id",
+          "properties": {
+            "displayName": "Cable ID",
+            "description": "光缆/电缆编号"
+          }
+        },
+        {
+          "name": "is_intra_site",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "is_intra_site",
+          "properties": {
+            "displayName": "Is Intra-Site",
+            "description": "是否站内短距链路"
+          }
+        },
+        {
+          "name": "protection_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "protection_type",
+          "properties": {
+            "displayName": "Protection Type",
+            "description": "链路保护方式。取值: NONE;1+1;1:1;RING"
+          }
+        },
+        {
+          "name": "carrier",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "carrier",
+          "properties": {
+            "displayName": "Carrier",
+            "description": "承载运营商（租用电路场景）"
+          }
+        },
+        {
+          "name": "circuit_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "circuit_id",
+          "properties": {
+            "displayName": "Circuit ID",
+            "description": "电路编号（运营商侧）"
+          }
+        },
+        {
+          "name": "sla_class",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "sla_class",
+          "properties": {
+            "displayName": "SLA Class",
+            "description": "链路SLA等级。取值: GOLD;SILVER;BRONZE"
+          }
+        },
+        {
+          "name": "admin_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "admin_status",
+          "properties": {
+            "displayName": "Admin Status",
+            "description": "管理状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "oper_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "oper_status",
+          "properties": {
+            "displayName": "Oper Status",
+            "description": "运行状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "commissioning_date",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "commissioning_date",
+          "properties": {
+            "displayName": "Commissioning Date",
+            "description": "链路开通日期"
+          }
+        },
+        {
+          "name": "contract_expire_date",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "contract_expire_date",
+          "properties": {
+            "displayName": "Contract Expire Date",
+            "description": "合同到期日"
+          }
+        },
+        {
+          "name": "monthly_cost",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "monthly_cost",
+          "properties": {
+            "displayName": "Monthly Cost (CNY)",
+            "description": "月租费用（租用链路）"
+          }
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "description",
+          "properties": {
+            "displayName": "Description",
+            "description": "备注"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "创建时间"
+          }
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "updated_at",
+          "properties": {
+            "displayName": "Updated At",
+            "description": "更新时间"
+          }
+        }
+      ],
+      "primaryKey": "link_id",
+      "properties": {
+        "displayName": "t_physical_link",
+        "description": "物理链路表 - 两接口间的光纤/电缆连接"
+      }
+    },
+    {
+      "name": "t_vrf_instance",
+      "tableReference": {
+        "table": "t_vrf_instance"
+      },
+      "columns": [
+        {
+          "name": "vrf_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "vrf_id",
+          "properties": {
+            "displayName": "VRF ID",
+            "description": "VRF实例唯一标识"
+          }
+        },
+        {
+          "name": "ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "ne_id",
+          "properties": {
+            "displayName": "NE ID",
+            "description": "所属网元ID（VRF配置在PE上）"
+          }
+        },
+        {
+          "name": "vrf_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "vrf_name",
+          "properties": {
+            "displayName": "VRF Name",
+            "description": "VRF实例名称（对应设备上VPN-Instance名称）"
+          }
+        },
+        {
+          "name": "route_distinguisher",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "route_distinguisher",
+          "properties": {
+            "displayName": "Route Distinguisher (RD)",
+            "description": "8字节路由标识符，用于区分不同VPN中重叠的IP地址空间，格式ASN:nn或IP:nn"
+          }
+        },
+        {
+          "name": "vpn_target_import",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "vpn_target_import",
+          "properties": {
+            "displayName": "RT Import",
+            "description": "导入路由目标列表，决定哪些远端PE的路由被导入本VRF"
+          }
+        },
+        {
+          "name": "vpn_target_export",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "vpn_target_export",
+          "properties": {
+            "displayName": "RT Export",
+            "description": "导出路由目标列表，标记本VRF路由应被哪些远端VRF接收"
+          }
+        },
+        {
+          "name": "address_family",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "address_family",
+          "properties": {
+            "displayName": "Address Family",
+            "description": "地址族。取值: IPV4;IPV6;DUAL"
+          }
+        },
+        {
+          "name": "label_mode",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "label_mode",
+          "properties": {
+            "displayName": "Label Mode",
+            "description": "MPLS标签分配模式。取值: PER_INSTANCE;PER_ROUTE"
+          }
+        },
+        {
+          "name": "tunnel_policy",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "tunnel_policy",
+          "properties": {
+            "displayName": "Tunnel Policy",
+            "description": "隧道策略名称，决定VPN流量选择哪种隧道承载"
+          }
+        },
+        {
+          "name": "srv6_locator",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "srv6_locator",
+          "properties": {
+            "displayName": "SRv6 Locator",
+            "description": "VPN实例绑定的SRv6 Locator"
+          }
+        },
+        {
+          "name": "srv6_sid_end_dt4",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "srv6_sid_end_dt4",
+          "properties": {
+            "displayName": "End.DT4 SID",
+            "description": "SRv6 End.DT4 SID，收到SRv6报文后解封装查IPv4 VRF路由表转发"
+          }
+        },
+        {
+          "name": "srv6_sid_end_dt6",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "srv6_sid_end_dt6",
+          "properties": {
+            "displayName": "End.DT6 SID",
+            "description": "SRv6 End.DT6 SID，类似End.DT4但用于IPv6 VRF"
+          }
+        },
+        {
+          "name": "evpn_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "evpn_type",
+          "properties": {
+            "displayName": "EVPN Type",
+            "description": "EVPN业务类型。取值: NONE;L2;L3;VPWS"
+          }
+        },
+        {
+          "name": "max_routes",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "max_routes",
+          "properties": {
+            "displayName": "Max Routes",
+            "description": "VRF允许的最大路由条数上限"
+          }
+        },
+        {
+          "name": "current_route_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "current_route_count",
+          "properties": {
+            "displayName": "Current Route Count",
+            "description": "当前实际路由条数"
+          }
+        },
+        {
+          "name": "associated_if_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "associated_if_count",
+          "properties": {
+            "displayName": "Associated Interface Count",
+            "description": "关联到该VRF的接口数量"
+          }
+        },
+        {
+          "name": "customer_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "customer_id",
+          "properties": {
+            "displayName": "Customer ID",
+            "description": "客户编号"
+          }
+        },
+        {
+          "name": "customer_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "customer_name",
+          "properties": {
+            "displayName": "Customer Name",
+            "description": "客户名称"
+          }
+        },
+        {
+          "name": "service_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "service_type",
+          "properties": {
+            "displayName": "Service Type",
+            "description": "业务类型。取值: MPLS_VPN;CLOUD_CONNECT;INTERNET"
+          }
+        },
+        {
+          "name": "admin_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "admin_status",
+          "properties": {
+            "displayName": "Admin Status",
+            "description": "管理状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "oper_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "oper_status",
+          "properties": {
+            "displayName": "Oper Status",
+            "description": "运行状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "description",
+          "properties": {
+            "displayName": "Description",
+            "description": "备注"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "创建时间"
+          }
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "updated_at",
+          "properties": {
+            "displayName": "Updated At",
+            "description": "更新时间"
+          }
+        }
+      ],
+      "primaryKey": "vrf_id",
+      "properties": {
+        "displayName": "t_vrf_instance",
+        "description": "VRF实例表 - PE设备上的VPN路由转发实例"
+      }
+    },
+    {
+      "name": "t_l3vpn_service",
+      "tableReference": {
+        "table": "t_l3vpn_service"
+      },
+      "columns": [
+        {
+          "name": "vpn_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "vpn_id",
+          "properties": {
+            "displayName": "VPN ID",
+            "description": "VPN业务唯一标识"
+          }
+        },
+        {
+          "name": "vpn_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "vpn_name",
+          "properties": {
+            "displayName": "VPN Name",
+            "description": "VPN业务名称"
+          }
+        },
+        {
+          "name": "vpn_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "vpn_type",
+          "properties": {
+            "displayName": "VPN Type",
+            "description": "VPN业务类型。取值: L3VPN;EVPN_L3;EVPN_VPWS"
+          }
+        },
+        {
+          "name": "topology",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "topology",
+          "properties": {
+            "displayName": "Topology",
+            "description": "VPN拓扑模型。取值: ANY_TO_ANY;HUB_SPOKE;P2P"
+          }
+        },
+        {
+          "name": "customer_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "customer_id",
+          "properties": {
+            "displayName": "Customer ID",
+            "description": "客户编号"
+          }
+        },
+        {
+          "name": "customer_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "customer_name",
+          "properties": {
+            "displayName": "Customer Name",
+            "description": "客户名称"
+          }
+        },
+        {
+          "name": "service_level",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "service_level",
+          "properties": {
+            "displayName": "Service Level",
+            "description": "服务等级，决定SLA保证水平和QoS优先级。取值: PLATINUM;GOLD;SILVER;BRONZE"
+          }
+        },
+        {
+          "name": "bandwidth_mbps",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "bandwidth_mbps",
+          "properties": {
+            "displayName": "Guaranteed Bandwidth (Mbps)",
+            "description": "SLA保证带宽"
+          }
+        },
+        {
+          "name": "max_latency_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "max_latency_ms",
+          "properties": {
+            "displayName": "Max Latency SLA (ms)",
+            "description": "SLA承诺最大端到端时延"
+          }
+        },
+        {
+          "name": "max_jitter_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "max_jitter_ms",
+          "properties": {
+            "displayName": "Max Jitter SLA (ms)",
+            "description": "SLA承诺最大抖动"
+          }
+        },
+        {
+          "name": "max_packet_loss_pct",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "max_packet_loss_pct",
+          "properties": {
+            "displayName": "Max Packet Loss SLA (%)",
+            "description": "SLA承诺最大丢包率"
+          }
+        },
+        {
+          "name": "pe_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "pe_count",
+          "properties": {
+            "displayName": "PE Count",
+            "description": "关联的PE设备数量"
+          }
+        },
+        {
+          "name": "site_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "site_count",
+          "properties": {
+            "displayName": "Site Count",
+            "description": "覆盖的客户站点数量"
+          }
+        },
+        {
+          "name": "underlay_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "underlay_type",
+          "properties": {
+            "displayName": "Underlay Type",
+            "description": "承载隧道类型，决定VPN流量使用哪种底层传输技术。取值: SRV6_BE;SRV6_TE;MPLS_LDP;MPLS_TE"
+          }
+        },
+        {
+          "name": "encryption_enabled",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "encryption_enabled",
+          "properties": {
+            "displayName": "Encryption Enabled",
+            "description": "是否启用IPSec加密"
+          }
+        },
+        {
+          "name": "multicast_enabled",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "multicast_enabled",
+          "properties": {
+            "displayName": "Multicast Enabled",
+            "description": "是否启用组播"
+          }
+        },
+        {
+          "name": "route_distinguisher",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "route_distinguisher",
+          "properties": {
+            "displayName": "Route Distinguisher",
+            "description": "全局RD"
+          }
+        },
+        {
+          "name": "vpn_target",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "vpn_target",
+          "properties": {
+            "displayName": "VPN Target (RT)",
+            "description": "RT配置"
+          }
+        },
+        {
+          "name": "contract_start_date",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "contract_start_date",
+          "properties": {
+            "displayName": "Contract Start",
+            "description": "合同起始日期"
+          }
+        },
+        {
+          "name": "contract_end_date",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "contract_end_date",
+          "properties": {
+            "displayName": "Contract End",
+            "description": "合同结束日期"
+          }
+        },
+        {
+          "name": "monthly_fee",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "monthly_fee",
+          "properties": {
+            "displayName": "Monthly Fee (CNY)",
+            "description": "月租费"
+          }
+        },
+        {
+          "name": "admin_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "admin_status",
+          "properties": {
+            "displayName": "Admin Status",
+            "description": "业务管理状态。取值: ACTIVE;SUSPENDED;TERMINATED"
+          }
+        },
+        {
+          "name": "oper_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "oper_status",
+          "properties": {
+            "displayName": "Oper Status",
+            "description": "业务运行状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "deploy_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "deploy_status",
+          "properties": {
+            "displayName": "Deploy Status",
+            "description": "部署状态。取值: DEPLOYED;DEPLOYING;PLANNED;FAILED"
+          }
+        },
+        {
+          "name": "last_audit_time",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "last_audit_time",
+          "properties": {
+            "displayName": "Last Audit Time",
+            "description": "最近配置审计时间"
+          }
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "description",
+          "properties": {
+            "displayName": "Description",
+            "description": "备注"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "创建时间"
+          }
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "updated_at",
+          "properties": {
+            "displayName": "Updated At",
+            "description": "更新时间"
+          }
+        }
+      ],
+      "primaryKey": "vpn_id",
+      "properties": {
+        "displayName": "t_l3vpn_service",
+        "description": "L3VPN业务表 - 端到端VPN服务实例"
+      }
+    },
+    {
+      "name": "t_vpn_pe_binding",
+      "tableReference": {
+        "table": "t_vpn_pe_binding"
+      },
+      "columns": [
+        {
+          "name": "binding_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "binding_id",
+          "properties": {
+            "displayName": "Binding ID",
+            "description": "绑定记录唯一标识"
+          }
+        },
+        {
+          "name": "vpn_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "vpn_id",
+          "properties": {
+            "displayName": "VPN ID",
+            "description": "VPN业务ID"
+          }
+        },
+        {
+          "name": "ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "ne_id",
+          "properties": {
+            "displayName": "NE ID",
+            "description": "PE网元ID"
+          }
+        },
+        {
+          "name": "vrf_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "vrf_id",
+          "properties": {
+            "displayName": "VRF ID",
+            "description": "该PE上对应的VRF实例ID"
+          }
+        },
+        {
+          "name": "if_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "if_id",
+          "properties": {
+            "displayName": "Interface ID",
+            "description": "PE侧接入接口ID（连接CE的接口）"
+          }
+        },
+        {
+          "name": "pe_role",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "pe_role",
+          "properties": {
+            "displayName": "PE Role",
+            "description": "该PE在VPN中的角色（Hub-Spoke拓扑下区分）。取值: HUB;SPOKE"
+          }
+        },
+        {
+          "name": "ce_ipv4",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "ce_ipv4",
+          "properties": {
+            "displayName": "CE IPv4",
+            "description": "CE侧接口IPv4地址"
+          }
+        },
+        {
+          "name": "pe_ipv4",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "pe_ipv4",
+          "properties": {
+            "displayName": "PE IPv4",
+            "description": "PE侧接口IPv4地址"
+          }
+        },
+        {
+          "name": "ce_ipv6",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "ce_ipv6",
+          "properties": {
+            "displayName": "CE IPv6",
+            "description": "CE侧接口IPv6"
+          }
+        },
+        {
+          "name": "pe_ipv6",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "pe_ipv6",
+          "properties": {
+            "displayName": "PE IPv6",
+            "description": "PE侧接口IPv6"
+          }
+        },
+        {
+          "name": "ce_as_number",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "ce_as_number",
+          "properties": {
+            "displayName": "CE AS Number",
+            "description": "CE侧BGP AS号（EBGP接入场景）"
+          }
+        },
+        {
+          "name": "routing_protocol",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "routing_protocol",
+          "properties": {
+            "displayName": "Routing Protocol",
+            "description": "PE-CE之间使用的路由协议。取值: STATIC;EBGP;OSPF"
+          }
+        },
+        {
+          "name": "access_bandwidth_mbps",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "access_bandwidth_mbps",
+          "properties": {
+            "displayName": "Access Bandwidth (Mbps)",
+            "description": "接入带宽"
+          }
+        },
+        {
+          "name": "vlan_id",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "vlan_id",
+          "properties": {
+            "displayName": "VLAN ID",
+            "description": "接入VLAN"
+          }
+        },
+        {
+          "name": "encapsulation",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "encapsulation",
+          "properties": {
+            "displayName": "Encapsulation",
+            "description": "封装类型。取值: DOT1Q;UNTAG;QINQ"
+          }
+        },
+        {
+          "name": "site_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "site_name",
+          "properties": {
+            "displayName": "Site Name",
+            "description": "接入站点名称（业务视角）"
+          }
+        },
+        {
+          "name": "admin_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "admin_status",
+          "properties": {
+            "displayName": "Admin Status",
+            "description": "管理状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "oper_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "oper_status",
+          "properties": {
+            "displayName": "Oper Status",
+            "description": "运行状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "description",
+          "properties": {
+            "displayName": "Description",
+            "description": "备注"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "创建时间"
+          }
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "updated_at",
+          "properties": {
+            "displayName": "Updated At",
+            "description": "更新时间"
+          }
+        }
+      ],
+      "primaryKey": "binding_id",
+      "properties": {
+        "displayName": "t_vpn_pe_binding",
+        "description": "VPN-PE绑定表 - VPN与PE设备的多对多关联"
+      }
+    },
+    {
+      "name": "t_srv6_policy",
+      "tableReference": {
+        "table": "t_srv6_policy"
+      },
+      "columns": [
+        {
+          "name": "policy_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "policy_id",
+          "properties": {
+            "displayName": "Policy ID",
+            "description": "SRv6 Policy唯一标识"
+          }
+        },
+        {
+          "name": "policy_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "policy_name",
+          "properties": {
+            "displayName": "Policy Name",
+            "description": "Policy名称"
+          }
+        },
+        {
+          "name": "source_ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "source_ne_id",
+          "properties": {
+            "displayName": "Source NE ID",
+            "description": "源端网元(头节点)ID"
+          }
+        },
+        {
+          "name": "endpoint_ipv6",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "endpoint_ipv6",
+          "properties": {
+            "displayName": "Endpoint IPv6",
+            "description": "Policy的Endpoint地址，标识尾节点。SR Policy由<headend,color,endpoint>三元组标识"
+          }
+        },
+        {
+          "name": "dest_ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "dest_ne_id",
+          "properties": {
+            "displayName": "Destination NE ID",
+            "description": "目的网元ID"
+          }
+        },
+        {
+          "name": "color",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "color",
+          "properties": {
+            "displayName": "Color",
+            "description": "Color值标识SLA意图（不同Color对应不同SLA需求）"
+          }
+        },
+        {
+          "name": "distinguisher",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "distinguisher",
+          "properties": {
+            "displayName": "Distinguisher",
+            "description": "区分相同Color+Endpoint的不同Policy"
+          }
+        },
+        {
+          "name": "binding_sid",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "binding_sid",
+          "properties": {
+            "displayName": "Binding SID",
+            "description": "绑定SID(BSID)，用于SRH压缩，一个BSID代表一段完整SRv6路径"
+          }
+        },
+        {
+          "name": "preference",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "preference",
+          "properties": {
+            "displayName": "Preference",
+            "description": "候选路径优先级，值越大越优先"
+          }
+        },
+        {
+          "name": "segment_list_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "segment_list_count",
+          "properties": {
+            "displayName": "Segment List Count",
+            "description": "Segment List数量"
+          }
+        },
+        {
+          "name": "segment_list",
+          "type": "TEXT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "segment_list",
+          "properties": {
+            "displayName": "Segment List",
+            "description": "SID序列(JSON)，定义转发路径。列表中SID顺序即转发顺序"
+          }
+        },
+        {
+          "name": "explicit_path",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "explicit_path",
+          "properties": {
+            "displayName": "Explicit Path",
+            "description": "是否显式指定路径"
+          }
+        },
+        {
+          "name": "provision_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "provision_type",
+          "properties": {
+            "displayName": "Provision Type",
+            "description": "部署方式。取值: STATIC;DYNAMIC;CONTROLLER"
+          }
+        },
+        {
+          "name": "sla_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "sla_type",
+          "properties": {
+            "displayName": "SLA Type",
+            "description": "SLA优化目标。取值: LOW_LATENCY;LOW_JITTER;HIGH_BW"
+          }
+        },
+        {
+          "name": "max_latency_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "max_latency_ms",
+          "properties": {
+            "displayName": "Max Latency Constraint (ms)",
+            "description": "路径最大时延约束"
+          }
+        },
+        {
+          "name": "max_jitter_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "max_jitter_ms",
+          "properties": {
+            "displayName": "Max Jitter Constraint (ms)",
+            "description": "路径最大抖动约束"
+          }
+        },
+        {
+          "name": "min_bandwidth_mbps",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "min_bandwidth_mbps",
+          "properties": {
+            "displayName": "Min Bandwidth Constraint (Mbps)",
+            "description": "路径最小带宽约束"
+          }
+        },
+        {
+          "name": "hop_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "hop_count",
+          "properties": {
+            "displayName": "Hop Count",
+            "description": "路径跳数"
+          }
+        },
+        {
+          "name": "associated_vpn_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "associated_vpn_count",
+          "properties": {
+            "displayName": "Associated VPN Count",
+            "description": "该Policy承载的VPN业务数量"
+          }
+        },
+        {
+          "name": "ecmp_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "ecmp_count",
+          "properties": {
+            "displayName": "ECMP Count",
+            "description": "等价多路径数量"
+          }
+        },
+        {
+          "name": "admin_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "admin_status",
+          "properties": {
+            "displayName": "Admin Status",
+            "description": "管理状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "oper_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "oper_status",
+          "properties": {
+            "displayName": "Oper Status",
+            "description": "运行状态。取值: UP;DOWN;PARTIAL"
+          }
+        },
+        {
+          "name": "deploy_source",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "deploy_source",
+          "properties": {
+            "displayName": "Deploy Source",
+            "description": "部署来源。取值: NCE;CLI;PCEP"
+          }
+        },
+        {
+          "name": "last_path_change",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "last_path_change",
+          "properties": {
+            "displayName": "Last Path Change",
+            "description": "最近路径变更时间"
+          }
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "description",
+          "properties": {
+            "displayName": "Description",
+            "description": "备注"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "创建时间"
+          }
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "updated_at",
+          "properties": {
+            "displayName": "Updated At",
+            "description": "更新时间"
+          }
+        }
+      ],
+      "primaryKey": "policy_id",
+      "properties": {
+        "displayName": "t_srv6_policy",
+        "description": "SRv6 Policy表 - SRv6 TE隧道策略"
+      }
+    },
+    {
+      "name": "t_tunnel",
+      "tableReference": {
+        "table": "t_tunnel"
+      },
+      "columns": [
+        {
+          "name": "tunnel_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "tunnel_id",
+          "properties": {
+            "displayName": "Tunnel ID",
+            "description": "隧道唯一标识"
+          }
+        },
+        {
+          "name": "tunnel_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "tunnel_name",
+          "properties": {
+            "displayName": "Tunnel Name",
+            "description": "隧道名称"
+          }
+        },
+        {
+          "name": "tunnel_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "tunnel_type",
+          "properties": {
+            "displayName": "Tunnel Type",
+            "description": "隧道类型。取值: SRV6_BE;SRV6_TE;MPLS_LDP;MPLS_TE;GRE"
+          }
+        },
+        {
+          "name": "source_ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "source_ne_id",
+          "properties": {
+            "displayName": "Source NE ID",
+            "description": "源端网元ID"
+          }
+        },
+        {
+          "name": "source_ip",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "source_ip",
+          "properties": {
+            "displayName": "Source IP",
+            "description": "源端IP/IPv6"
+          }
+        },
+        {
+          "name": "dest_ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "dest_ne_id",
+          "properties": {
+            "displayName": "Destination NE ID",
+            "description": "宿端网元ID"
+          }
+        },
+        {
+          "name": "dest_ip",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "dest_ip",
+          "properties": {
+            "displayName": "Destination IP",
+            "description": "宿端IP/IPv6"
+          }
+        },
+        {
+          "name": "policy_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "policy_id",
+          "properties": {
+            "displayName": "Policy ID",
+            "description": "关联SRv6 Policy ID（SRv6 TE隧道）"
+          }
+        },
+        {
+          "name": "tunnel_if_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "tunnel_if_id",
+          "properties": {
+            "displayName": "Tunnel Interface ID",
+            "description": "关联的Tunnel逻辑接口ID"
+          }
+        },
+        {
+          "name": "bandwidth_mbps",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "bandwidth_mbps",
+          "properties": {
+            "displayName": "Bandwidth (Mbps)",
+            "description": "隧道配置带宽"
+          }
+        },
+        {
+          "name": "measured_latency_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "measured_latency_ms",
+          "properties": {
+            "displayName": "Measured Latency (ms)",
+            "description": "实测时延（iFIT/TWAMP检测值）"
+          }
+        },
+        {
+          "name": "measured_jitter_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "measured_jitter_ms",
+          "properties": {
+            "displayName": "Measured Jitter (ms)",
+            "description": "实测抖动"
+          }
+        },
+        {
+          "name": "path_hop_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "path_hop_count",
+          "properties": {
+            "displayName": "Path Hop Count",
+            "description": "路径跳数"
+          }
+        },
+        {
+          "name": "protection_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "protection_type",
+          "properties": {
+            "displayName": "Protection Type",
+            "description": "保护类型。取值: NONE;HOT_STANDBY;TI_LFA;FRR"
+          }
+        },
+        {
+          "name": "is_bidirectional",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "is_bidirectional",
+          "properties": {
+            "displayName": "Is Bidirectional",
+            "description": "是否双向隧道"
+          }
+        },
+        {
+          "name": "associated_vpn_ids",
+          "type": "TEXT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "associated_vpn_ids",
+          "properties": {
+            "displayName": "Associated VPN IDs",
+            "description": "承载的VPN ID列表（JSON）"
+          }
+        },
+        {
+          "name": "tunnel_group_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "tunnel_group_id",
+          "properties": {
+            "displayName": "Tunnel Group ID",
+            "description": "隧道组ID（Policy Group场景）"
+          }
+        },
+        {
+          "name": "group_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "group_type",
+          "properties": {
+            "displayName": "Group Type",
+            "description": "隧道组类型。取值: ANY_TO_ANY;HUB_SPOKE"
+          }
+        },
+        {
+          "name": "signaling_protocol",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "signaling_protocol",
+          "properties": {
+            "displayName": "Signaling Protocol",
+            "description": "信令协议。取值: BGP_SR_POLICY;PCEP;RSVP_TE;STATIC"
+          }
+        },
+        {
+          "name": "admin_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "admin_status",
+          "properties": {
+            "displayName": "Admin Status",
+            "description": "管理状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "oper_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "oper_status",
+          "properties": {
+            "displayName": "Oper Status",
+            "description": "运行状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "setup_priority",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "setup_priority",
+          "properties": {
+            "displayName": "Setup Priority",
+            "description": "建立优先级(0最高7最低)"
+          }
+        },
+        {
+          "name": "hold_priority",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "hold_priority",
+          "properties": {
+            "displayName": "Hold Priority",
+            "description": "维持优先级"
+          }
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "description",
+          "properties": {
+            "displayName": "Description",
+            "description": "备注"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "创建时间"
+          }
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "updated_at",
+          "properties": {
+            "displayName": "Updated At",
+            "description": "更新时间"
+          }
+        }
+      ],
+      "primaryKey": "tunnel_id",
+      "properties": {
+        "displayName": "t_tunnel",
+        "description": "隧道表 - SRv6/MPLS逻辑隧道"
+      }
+    },
+    {
+      "name": "t_ne_perf_kpi",
+      "tableReference": {
+        "table": "t_ne_perf_kpi"
+      },
+      "columns": [
+        {
+          "name": "kpi_id",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "kpi_id",
+          "properties": {
+            "displayName": "KPI ID",
+            "description": "记录ID（自增主键）"
+          }
+        },
+        {
+          "name": "ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "ne_id",
+          "properties": {
+            "displayName": "NE ID",
+            "description": "网元ID"
+          }
+        },
+        {
+          "name": "collect_time",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "collect_time",
+          "properties": {
+            "displayName": "Collection Time",
+            "description": "采集时间点"
+          }
+        },
+        {
+          "name": "granularity_min",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "granularity_min",
+          "properties": {
+            "displayName": "Granularity (min)",
+            "description": "采集粒度"
+          }
+        },
+        {
+          "name": "cpu_usage_avg_pct",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "cpu_usage_avg_pct",
+          "properties": {
+            "displayName": "CPU Usage Avg (%)",
+            "description": "CPU平均利用率"
+          }
+        },
+        {
+          "name": "cpu_usage_max_pct",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "cpu_usage_max_pct",
+          "properties": {
+            "displayName": "CPU Usage Max (%)",
+            "description": "CPU峰值利用率"
+          }
+        },
+        {
+          "name": "memory_usage_avg_pct",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "memory_usage_avg_pct",
+          "properties": {
+            "displayName": "Memory Usage Avg (%)",
+            "description": "内存平均利用率"
+          }
+        },
+        {
+          "name": "memory_usage_max_pct",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "memory_usage_max_pct",
+          "properties": {
+            "displayName": "Memory Usage Max (%)",
+            "description": "内存峰值利用率"
+          }
+        },
+        {
+          "name": "temperature_avg_c",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "temperature_avg_c",
+          "properties": {
+            "displayName": "Temperature Avg (°C)",
+            "description": "设备平均温度"
+          }
+        },
+        {
+          "name": "temperature_max_c",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "temperature_max_c",
+          "properties": {
+            "displayName": "Temperature Max (°C)",
+            "description": "设备最高温度"
+          }
+        },
+        {
+          "name": "power_consumption_w",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "power_consumption_w",
+          "properties": {
+            "displayName": "Power Consumption (W)",
+            "description": "实际功耗"
+          }
+        },
+        {
+          "name": "fan_speed_rpm",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "fan_speed_rpm",
+          "properties": {
+            "displayName": "Fan Speed (RPM)",
+            "description": "风扇转速"
+          }
+        },
+        {
+          "name": "uptime_seconds",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "uptime_seconds",
+          "properties": {
+            "displayName": "Uptime (seconds)",
+            "description": "运行时长"
+          }
+        },
+        {
+          "name": "fib_usage_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "fib_usage_count",
+          "properties": {
+            "displayName": "FIB Usage Count",
+            "description": "FIB(转发信息表)已用条目数"
+          }
+        },
+        {
+          "name": "fib_capacity",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "fib_capacity",
+          "properties": {
+            "displayName": "FIB Capacity",
+            "description": "FIB表总容量"
+          }
+        },
+        {
+          "name": "arp_entry_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "arp_entry_count",
+          "properties": {
+            "displayName": "ARP Entry Count",
+            "description": "ARP表项数"
+          }
+        },
+        {
+          "name": "route_count_ipv4",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "route_count_ipv4",
+          "properties": {
+            "displayName": "IPv4 Route Count",
+            "description": "IPv4路由表条目数"
+          }
+        },
+        {
+          "name": "route_count_ipv6",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "route_count_ipv6",
+          "properties": {
+            "displayName": "IPv6 Route Count",
+            "description": "IPv6路由表条目数"
+          }
+        },
+        {
+          "name": "bgp_peer_up_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "bgp_peer_up_count",
+          "properties": {
+            "displayName": "BGP Peer Up Count",
+            "description": "BGP邻居Established状态数量"
+          }
+        },
+        {
+          "name": "bgp_peer_total_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "bgp_peer_total_count",
+          "properties": {
+            "displayName": "BGP Peer Total Count",
+            "description": "BGP邻居配置总数"
+          }
+        },
+        {
+          "name": "isis_adj_up_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "isis_adj_up_count",
+          "properties": {
+            "displayName": "IS-IS Adjacency Up Count",
+            "description": "IS-IS邻接关系UP数量"
+          }
+        },
+        {
+          "name": "alarm_critical_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "alarm_critical_count",
+          "properties": {
+            "displayName": "Critical Alarm Count",
+            "description": "当前紧急告警数"
+          }
+        },
+        {
+          "name": "alarm_major_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "alarm_major_count",
+          "properties": {
+            "displayName": "Major Alarm Count",
+            "description": "当前重要告警数"
+          }
+        },
+        {
+          "name": "alarm_minor_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "alarm_minor_count",
+          "properties": {
+            "displayName": "Minor Alarm Count",
+            "description": "当前次要告警数"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "写入时间"
+          }
+        }
+      ],
+      "primaryKey": "kpi_id",
+      "properties": {
+        "displayName": "t_ne_perf_kpi",
+        "description": "网元性能KPI表 - CPU/内存/温度等设备级指标"
+      }
+    },
+    {
+      "name": "t_interface_perf_kpi",
+      "tableReference": {
+        "table": "t_interface_perf_kpi"
+      },
+      "columns": [
+        {
+          "name": "kpi_id",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "kpi_id",
+          "properties": {
+            "displayName": "KPI ID",
+            "description": "记录ID（自增主键）"
+          }
+        },
+        {
+          "name": "if_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "if_id",
+          "properties": {
+            "displayName": "Interface ID",
+            "description": "接口ID"
+          }
+        },
+        {
+          "name": "ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "ne_id",
+          "properties": {
+            "displayName": "NE ID",
+            "description": "网元ID"
+          }
+        },
+        {
+          "name": "collect_time",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "collect_time",
+          "properties": {
+            "displayName": "Collection Time",
+            "description": "采集时间"
+          }
+        },
+        {
+          "name": "granularity_min",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "granularity_min",
+          "properties": {
+            "displayName": "Granularity (min)",
+            "description": "采集粒度"
+          }
+        },
+        {
+          "name": "in_octets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "in_octets",
+          "properties": {
+            "displayName": "In Octets",
+            "description": "入方向字节数（采集周期内增量）"
+          }
+        },
+        {
+          "name": "out_octets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "out_octets",
+          "properties": {
+            "displayName": "Out Octets",
+            "description": "出方向字节数"
+          }
+        },
+        {
+          "name": "in_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "in_packets",
+          "properties": {
+            "displayName": "In Packets",
+            "description": "入方向总包数"
+          }
+        },
+        {
+          "name": "out_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "out_packets",
+          "properties": {
+            "displayName": "Out Packets",
+            "description": "出方向总包数"
+          }
+        },
+        {
+          "name": "in_unicast_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "in_unicast_packets",
+          "properties": {
+            "displayName": "In Unicast Packets",
+            "description": "入方向单播包数"
+          }
+        },
+        {
+          "name": "out_unicast_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "out_unicast_packets",
+          "properties": {
+            "displayName": "Out Unicast Packets",
+            "description": "出方向单播包数"
+          }
+        },
+        {
+          "name": "in_multicast_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "in_multicast_packets",
+          "properties": {
+            "displayName": "In Multicast Packets",
+            "description": "入方向组播包数"
+          }
+        },
+        {
+          "name": "out_multicast_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "out_multicast_packets",
+          "properties": {
+            "displayName": "Out Multicast Packets",
+            "description": "出方向组播包数"
+          }
+        },
+        {
+          "name": "in_broadcast_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "in_broadcast_packets",
+          "properties": {
+            "displayName": "In Broadcast Packets",
+            "description": "入方向广播包数"
+          }
+        },
+        {
+          "name": "out_broadcast_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "out_broadcast_packets",
+          "properties": {
+            "displayName": "Out Broadcast Packets",
+            "description": "出方向广播包数"
+          }
+        },
+        {
+          "name": "in_bandwidth_usage_pct",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "in_bandwidth_usage_pct",
+          "properties": {
+            "displayName": "In Bandwidth Usage (%)",
+            "description": "入方向带宽利用率 = in_octets×8/(speed_mbps×1e6×采集秒)×100"
+          }
+        },
+        {
+          "name": "out_bandwidth_usage_pct",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "out_bandwidth_usage_pct",
+          "properties": {
+            "displayName": "Out Bandwidth Usage (%)",
+            "description": "出方向带宽利用率"
+          }
+        },
+        {
+          "name": "in_peak_rate_mbps",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "in_peak_rate_mbps",
+          "properties": {
+            "displayName": "In Peak Rate (Mbps)",
+            "description": "入方向峰值速率"
+          }
+        },
+        {
+          "name": "out_peak_rate_mbps",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "out_peak_rate_mbps",
+          "properties": {
+            "displayName": "Out Peak Rate (Mbps)",
+            "description": "出方向峰值速率"
+          }
+        },
+        {
+          "name": "in_error_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "in_error_packets",
+          "properties": {
+            "displayName": "In Error Packets",
+            "description": "入方向错误包数（CRC/帧错误等）"
+          }
+        },
+        {
+          "name": "out_error_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "out_error_packets",
+          "properties": {
+            "displayName": "Out Error Packets",
+            "description": "出方向错误包数"
+          }
+        },
+        {
+          "name": "in_discard_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "in_discard_packets",
+          "properties": {
+            "displayName": "In Discard Packets",
+            "description": "入方向丢弃包数（队列溢出等）"
+          }
+        },
+        {
+          "name": "out_discard_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "out_discard_packets",
+          "properties": {
+            "displayName": "Out Discard Packets",
+            "description": "出方向丢弃包数"
+          }
+        },
+        {
+          "name": "crc_error_count",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "crc_error_count",
+          "properties": {
+            "displayName": "CRC Error Count",
+            "description": "CRC校验错误数"
+          }
+        },
+        {
+          "name": "collision_count",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "collision_count",
+          "properties": {
+            "displayName": "Collision Count",
+            "description": "碰撞数"
+          }
+        },
+        {
+          "name": "oper_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "oper_status",
+          "properties": {
+            "displayName": "Oper Status",
+            "description": "采集时刻接口运行状态快照。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "status_change_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "status_change_count",
+          "properties": {
+            "displayName": "Status Change Count",
+            "description": "状态翻转次数"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "写入时间"
+          }
+        }
+      ],
+      "primaryKey": "kpi_id",
+      "properties": {
+        "displayName": "t_interface_perf_kpi",
+        "description": "接口性能KPI表 - 流量/带宽利用率/错包等接口级指标"
+      }
+    },
+    {
+      "name": "t_tunnel_perf_kpi",
+      "tableReference": {
+        "table": "t_tunnel_perf_kpi"
+      },
+      "columns": [
+        {
+          "name": "kpi_id",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "kpi_id",
+          "properties": {
+            "displayName": "KPI ID",
+            "description": "记录ID（自增主键）"
+          }
+        },
+        {
+          "name": "tunnel_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "tunnel_id",
+          "properties": {
+            "displayName": "Tunnel ID",
+            "description": "隧道ID"
+          }
+        },
+        {
+          "name": "source_ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "source_ne_id",
+          "properties": {
+            "displayName": "Source NE ID",
+            "description": "源网元ID"
+          }
+        },
+        {
+          "name": "dest_ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "dest_ne_id",
+          "properties": {
+            "displayName": "Destination NE ID",
+            "description": "宿网元ID"
+          }
+        },
+        {
+          "name": "collect_time",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "collect_time",
+          "properties": {
+            "displayName": "Collection Time",
+            "description": "采集时间"
+          }
+        },
+        {
+          "name": "granularity_min",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "granularity_min",
+          "properties": {
+            "displayName": "Granularity (min)",
+            "description": "采集粒度"
+          }
+        },
+        {
+          "name": "latency_avg_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "latency_avg_ms",
+          "properties": {
+            "displayName": "Latency Avg (ms)",
+            "description": "平均单向时延"
+          }
+        },
+        {
+          "name": "latency_max_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "latency_max_ms",
+          "properties": {
+            "displayName": "Latency Max (ms)",
+            "description": "最大时延"
+          }
+        },
+        {
+          "name": "latency_min_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "latency_min_ms",
+          "properties": {
+            "displayName": "Latency Min (ms)",
+            "description": "最小时延"
+          }
+        },
+        {
+          "name": "jitter_avg_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "jitter_avg_ms",
+          "properties": {
+            "displayName": "Jitter Avg (ms)",
+            "description": "平均抖动"
+          }
+        },
+        {
+          "name": "jitter_max_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "jitter_max_ms",
+          "properties": {
+            "displayName": "Jitter Max (ms)",
+            "description": "最大抖动"
+          }
+        },
+        {
+          "name": "packet_loss_rate_pct",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "packet_loss_rate_pct",
+          "properties": {
+            "displayName": "Packet Loss Rate (%)",
+            "description": "丢包率"
+          }
+        },
+        {
+          "name": "forward_octets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "forward_octets",
+          "properties": {
+            "displayName": "Forward Octets",
+            "description": "转发字节数"
+          }
+        },
+        {
+          "name": "forward_packets",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "forward_packets",
+          "properties": {
+            "displayName": "Forward Packets",
+            "description": "转发包数"
+          }
+        },
+        {
+          "name": "bandwidth_usage_pct",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "bandwidth_usage_pct",
+          "properties": {
+            "displayName": "Bandwidth Usage (%)",
+            "description": "隧道带宽利用率"
+          }
+        },
+        {
+          "name": "rtt_avg_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "rtt_avg_ms",
+          "properties": {
+            "displayName": "RTT Avg (ms)",
+            "description": "平均往返时延"
+          }
+        },
+        {
+          "name": "rtt_max_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "rtt_max_ms",
+          "properties": {
+            "displayName": "RTT Max (ms)",
+            "description": "最大RTT"
+          }
+        },
+        {
+          "name": "path_change_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "path_change_count",
+          "properties": {
+            "displayName": "Path Change Count",
+            "description": "采集周期内路径变更次数"
+          }
+        },
+        {
+          "name": "oper_status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "oper_status",
+          "properties": {
+            "displayName": "Oper Status",
+            "description": "采集时刻隧道运行状态。取值: UP;DOWN"
+          }
+        },
+        {
+          "name": "sla_violation",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "sla_violation",
+          "properties": {
+            "displayName": "SLA Violation",
+            "description": "该采集周期是否发生SLA违规"
+          }
+        },
+        {
+          "name": "sla_violation_type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "sla_violation_type",
+          "properties": {
+            "displayName": "SLA Violation Type",
+            "description": "违规指标类型（可多值逗号分隔）"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "写入时间"
+          }
+        }
+      ],
+      "primaryKey": "kpi_id",
+      "properties": {
+        "displayName": "t_tunnel_perf_kpi",
+        "description": "隧道性能KPI表 - 时延/抖动/丢包等隧道级指标"
+      }
+    },
+    {
+      "name": "t_vpn_sla_kpi",
+      "tableReference": {
+        "table": "t_vpn_sla_kpi"
+      },
+      "columns": [
+        {
+          "name": "kpi_id",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "kpi_id",
+          "properties": {
+            "displayName": "KPI ID",
+            "description": "记录ID（自增主键）"
+          }
+        },
+        {
+          "name": "vpn_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "vpn_id",
+          "properties": {
+            "displayName": "VPN ID",
+            "description": "VPN业务ID"
+          }
+        },
+        {
+          "name": "pe_ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "pe_ne_id",
+          "properties": {
+            "displayName": "PE NE ID",
+            "description": "测量发起PE的网元ID"
+          }
+        },
+        {
+          "name": "remote_pe_ne_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "remote_pe_ne_id",
+          "properties": {
+            "displayName": "Remote PE NE ID",
+            "description": "对端PE网元ID"
+          }
+        },
+        {
+          "name": "collect_time",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "collect_time",
+          "properties": {
+            "displayName": "Collection Time",
+            "description": "采集时间"
+          }
+        },
+        {
+          "name": "granularity_min",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "granularity_min",
+          "properties": {
+            "displayName": "Granularity (min)",
+            "description": "采集粒度"
+          }
+        },
+        {
+          "name": "e2e_latency_avg_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "e2e_latency_avg_ms",
+          "properties": {
+            "displayName": "E2E Latency Avg (ms)",
+            "description": "端到端平均时延"
+          }
+        },
+        {
+          "name": "e2e_latency_max_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "e2e_latency_max_ms",
+          "properties": {
+            "displayName": "E2E Latency Max (ms)",
+            "description": "端到端最大时延"
+          }
+        },
+        {
+          "name": "e2e_jitter_avg_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "e2e_jitter_avg_ms",
+          "properties": {
+            "displayName": "E2E Jitter Avg (ms)",
+            "description": "端到端平均抖动"
+          }
+        },
+        {
+          "name": "e2e_jitter_max_ms",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "e2e_jitter_max_ms",
+          "properties": {
+            "displayName": "E2E Jitter Max (ms)",
+            "description": "端到端最大抖动"
+          }
+        },
+        {
+          "name": "e2e_packet_loss_pct",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "e2e_packet_loss_pct",
+          "properties": {
+            "displayName": "E2E Packet Loss (%)",
+            "description": "端到端丢包率"
+          }
+        },
+        {
+          "name": "availability_pct",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "availability_pct",
+          "properties": {
+            "displayName": "Availability (%)",
+            "description": "可用率"
+          }
+        },
+        {
+          "name": "throughput_mbps",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "throughput_mbps",
+          "properties": {
+            "displayName": "Throughput (Mbps)",
+            "description": "实际吞吐量"
+          }
+        },
+        {
+          "name": "vpn_route_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "vpn_route_count",
+          "properties": {
+            "displayName": "VPN Route Count",
+            "description": "VPN路由条数"
+          }
+        },
+        {
+          "name": "route_flap_count",
+          "type": "INT",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "route_flap_count",
+          "properties": {
+            "displayName": "Route Flap Count",
+            "description": "路由震荡次数"
+          }
+        },
+        {
+          "name": "sla_latency_met",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "sla_latency_met",
+          "properties": {
+            "displayName": "SLA Latency Met",
+            "description": "时延SLA是否达标"
+          }
+        },
+        {
+          "name": "sla_jitter_met",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "sla_jitter_met",
+          "properties": {
+            "displayName": "SLA Jitter Met",
+            "description": "抖动SLA是否达标"
+          }
+        },
+        {
+          "name": "sla_loss_met",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "sla_loss_met",
+          "properties": {
+            "displayName": "SLA Loss Met",
+            "description": "丢包SLA是否达标"
+          }
+        },
+        {
+          "name": "sla_availability_met",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "sla_availability_met",
+          "properties": {
+            "displayName": "SLA Availability Met",
+            "description": "可用率SLA是否达标"
+          }
+        },
+        {
+          "name": "sla_overall_met",
+          "type": "BOOLEAN",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "sla_overall_met",
+          "properties": {
+            "displayName": "SLA Overall Met",
+            "description": "综合SLA是否全部达标（全部子项均达标时为TRUE）"
+          }
+        },
+        {
+          "name": "mos_score",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "mos_score",
+          "properties": {
+            "displayName": "MOS Score",
+            "description": "平均意见得分（VoIP语音质量评分）"
+          }
+        },
+        {
+          "name": "qos_class_applied",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "expression": "qos_class_applied",
+          "properties": {
+            "displayName": "QoS Class Applied",
+            "description": "实际应用的QoS策略等级。取值: EF;AF41;BE"
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": true,
+          "expression": "created_at",
+          "properties": {
+            "displayName": "Created At",
+            "description": "写入时间"
+          }
+        }
+      ],
+      "primaryKey": "kpi_id",
+      "properties": {
+        "displayName": "t_vpn_sla_kpi",
+        "description": "VPN SLA KPI表 - 端到端SLA达标情况"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "name": "t_network_element_site_id_t_site_site_id",
+      "models": [
+        "t_network_element",
+        "t_site"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_network_element.site_id = t_site.site_id",
+      "properties": {
+        "displayName": "网元所属站点",
+        "description": "网元设备部署在哪个站点/机房"
+      }
+    },
+    {
+      "name": "t_board_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_board",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_board.ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "单板所属网元",
+        "description": "单板安装在哪台网元设备上"
+      }
+    },
+    {
+      "name": "t_interface_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_interface",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_interface.ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "接口所属网元",
+        "description": "接口属于哪台网元设备"
+      }
+    },
+    {
+      "name": "t_interface_board_id_t_board_board_id",
+      "models": [
+        "t_interface",
+        "t_board"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_interface.board_id = t_board.board_id",
+      "properties": {
+        "displayName": "接口所属单板",
+        "description": "物理接口安装在哪块单板上"
+      }
+    },
+    {
+      "name": "t_physical_link_a_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_physical_link",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_physical_link.a_ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "链路A端网元",
+        "description": "物理链路A端连接的网元"
+      }
+    },
+    {
+      "name": "t_physical_link_a_if_id_t_interface_if_id",
+      "models": [
+        "t_physical_link",
+        "t_interface"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_physical_link.a_if_id = t_interface.if_id",
+      "properties": {
+        "displayName": "链路A端接口",
+        "description": "物理链路A端连接的接口"
+      }
+    },
+    {
+      "name": "t_physical_link_a_site_id_t_site_site_id",
+      "models": [
+        "t_physical_link",
+        "t_site"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_physical_link.a_site_id = t_site.site_id",
+      "properties": {
+        "displayName": "链路A端站点",
+        "description": "物理链路A端所在站点"
+      }
+    },
+    {
+      "name": "t_physical_link_z_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_physical_link",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_physical_link.z_ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "链路Z端网元",
+        "description": "物理链路Z端连接的网元"
+      }
+    },
+    {
+      "name": "t_physical_link_z_if_id_t_interface_if_id",
+      "models": [
+        "t_physical_link",
+        "t_interface"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_physical_link.z_if_id = t_interface.if_id",
+      "properties": {
+        "displayName": "链路Z端接口",
+        "description": "物理链路Z端连接的接口"
+      }
+    },
+    {
+      "name": "t_physical_link_z_site_id_t_site_site_id",
+      "models": [
+        "t_physical_link",
+        "t_site"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_physical_link.z_site_id = t_site.site_id",
+      "properties": {
+        "displayName": "链路Z端站点",
+        "description": "物理链路Z端所在站点"
+      }
+    },
+    {
+      "name": "t_vrf_instance_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_vrf_instance",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_vrf_instance.ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "VRF所属网元",
+        "description": "VRF实例运行在哪台PE设备上"
+      }
+    },
+    {
+      "name": "t_vpn_pe_binding_vpn_id_t_l3vpn_service_vpn_id",
+      "models": [
+        "t_vpn_pe_binding",
+        "t_l3vpn_service"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_vpn_pe_binding.vpn_id = t_l3vpn_service.vpn_id",
+      "properties": {
+        "displayName": "绑定关联VPN",
+        "description": "PE绑定记录对应的VPN业务"
+      }
+    },
+    {
+      "name": "t_vpn_pe_binding_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_vpn_pe_binding",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_vpn_pe_binding.ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "绑定关联网元",
+        "description": "PE绑定记录对应的PE设备"
+      }
+    },
+    {
+      "name": "t_vpn_pe_binding_vrf_id_t_vrf_instance_vrf_id",
+      "models": [
+        "t_vpn_pe_binding",
+        "t_vrf_instance"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_vpn_pe_binding.vrf_id = t_vrf_instance.vrf_id",
+      "properties": {
+        "displayName": "绑定关联VRF",
+        "description": "PE绑定记录使用的VRF实例"
+      }
+    },
+    {
+      "name": "t_vpn_pe_binding_if_id_t_interface_if_id",
+      "models": [
+        "t_vpn_pe_binding",
+        "t_interface"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_vpn_pe_binding.if_id = t_interface.if_id",
+      "properties": {
+        "displayName": "绑定关联接口",
+        "description": "PE绑定记录使用的接入接口"
+      }
+    },
+    {
+      "name": "t_srv6_policy_source_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_srv6_policy",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_srv6_policy.source_ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "SRv6策略源网元",
+        "description": "SRv6 Policy的头节点(源PE)"
+      }
+    },
+    {
+      "name": "t_srv6_policy_dest_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_srv6_policy",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_srv6_policy.dest_ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "SRv6策略宿网元",
+        "description": "SRv6 Policy的尾节点(宿PE)"
+      }
+    },
+    {
+      "name": "t_tunnel_source_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_tunnel",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_tunnel.source_ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "隧道源网元",
+        "description": "隧道的源端网元"
+      }
+    },
+    {
+      "name": "t_tunnel_dest_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_tunnel",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_tunnel.dest_ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "隧道宿网元",
+        "description": "隧道的宿端网元"
+      }
+    },
+    {
+      "name": "t_tunnel_policy_id_t_srv6_policy_policy_id",
+      "models": [
+        "t_tunnel",
+        "t_srv6_policy"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_tunnel.policy_id = t_srv6_policy.policy_id",
+      "properties": {
+        "displayName": "隧道关联策略",
+        "description": "隧道由哪条SRv6 Policy承载"
+      }
+    },
+    {
+      "name": "t_ne_perf_kpi_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_ne_perf_kpi",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_ne_perf_kpi.ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "网元KPI关联网元",
+        "description": "性能KPI采集自哪台网元"
+      }
+    },
+    {
+      "name": "t_interface_perf_kpi_if_id_t_interface_if_id",
+      "models": [
+        "t_interface_perf_kpi",
+        "t_interface"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_interface_perf_kpi.if_id = t_interface.if_id",
+      "properties": {
+        "displayName": "接口KPI关联接口",
+        "description": "性能KPI采集自哪个接口"
+      }
+    },
+    {
+      "name": "t_interface_perf_kpi_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_interface_perf_kpi",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_interface_perf_kpi.ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "接口KPI关联网元",
+        "description": "接口KPI所属网元(冗余外键加速查询)"
+      }
+    },
+    {
+      "name": "t_tunnel_perf_kpi_tunnel_id_t_tunnel_tunnel_id",
+      "models": [
+        "t_tunnel_perf_kpi",
+        "t_tunnel"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_tunnel_perf_kpi.tunnel_id = t_tunnel.tunnel_id",
+      "properties": {
+        "displayName": "隧道KPI关联隧道",
+        "description": "性能KPI采集自哪条隧道"
+      }
+    },
+    {
+      "name": "t_tunnel_perf_kpi_source_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_tunnel_perf_kpi",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_tunnel_perf_kpi.source_ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "隧道KPI源网元",
+        "description": "隧道KPI的源端网元"
+      }
+    },
+    {
+      "name": "t_tunnel_perf_kpi_dest_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_tunnel_perf_kpi",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_tunnel_perf_kpi.dest_ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "隧道KPI宿网元",
+        "description": "隧道KPI的宿端网元"
+      }
+    },
+    {
+      "name": "t_vpn_sla_kpi_vpn_id_t_l3vpn_service_vpn_id",
+      "models": [
+        "t_vpn_sla_kpi",
+        "t_l3vpn_service"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_vpn_sla_kpi.vpn_id = t_l3vpn_service.vpn_id",
+      "properties": {
+        "displayName": "SLA KPI关联VPN",
+        "description": "SLA指标对应的VPN业务"
+      }
+    },
+    {
+      "name": "t_vpn_sla_kpi_pe_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_vpn_sla_kpi",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_vpn_sla_kpi.pe_ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "SLA KPI本端PE",
+        "description": "SLA测量的本端PE设备"
+      }
+    },
+    {
+      "name": "t_vpn_sla_kpi_remote_pe_ne_id_t_network_element_ne_id",
+      "models": [
+        "t_vpn_sla_kpi",
+        "t_network_element"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "t_vpn_sla_kpi.remote_pe_ne_id = t_network_element.ne_id",
+      "properties": {
+        "displayName": "SLA KPI远端PE",
+        "description": "SLA测量的远端PE设备"
+      }
+    }
+  ],
+  "metrics": [],
+  "views": [],
+  "enumDefinitions": [],
+  "macros": []
+}
