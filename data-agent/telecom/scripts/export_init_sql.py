@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """
-从 DuckDB 导出 Init SQL（CREATE TABLE + INSERT INTO），用于 WrenAI 导入。
+导出 WrenAI 所需的 Init SQL + CSV 数据文件。
 
 使用方式：
-    python telecom/scripts/export_init_sql.py --output telecom_init.sql
+    python telecom/scripts/export_init_sql.py
 
-然后在 WrenAI UI 的 "Init SQL" 框中粘贴 telecom_init.sql 的内容。
+产出：
+    1. WrenAI/docker/data/csv/*.csv    — 14 张表的数据文件（挂载到容器内）
+    2. telecom_init.sql                — 56 行 Init SQL（粘贴到 WrenAI UI）
+
+Init SQL 只有 DDL + read_csv_auto() 语句，不含实际数据，
+数据通过 Docker volume 挂载的 CSV 文件加载。
 
 前提：
     - telecom_nms.duckdb 需要先用 generate_mock_data.py 生成
-    - 导出约 21000 行 SQL（14 张表的 DDL + 数据）
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -24,6 +29,8 @@ except ImportError:
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_DB = PROJECT_ROOT / "telecom_nms.duckdb"
+# CSV 文件存放在 WrenAI/docker/data/，通过 docker-compose volume 挂载到容器
+DEFAULT_CSV_DIR = PROJECT_ROOT / "WrenAI" / "docker" / "data"
 
 # 表的拓扑排序（外键依赖顺序，被引用的表在前）
 TABLE_ORDER = [
@@ -43,64 +50,71 @@ TABLE_ORDER = [
     "t_vpn_sla_kpi",
 ]
 
+# CSV 文件在 Docker 容器内的路径
+# docker-compose.yaml 中 wren-engine 挂载: ${PROJECT_DIR}/data:/usr/src/app/data
+CSV_CONTAINER_DIR = "/usr/src/app/data"
 
-def export_init_sql(db_path: str) -> str:
-    """从 DuckDB 导出完整的 Init SQL"""
-    conn = duckdb.connect(db_path, read_only=True)
-    parts = []
 
+def export_csv(conn, csv_dir: Path):
+    """导出每张表为 CSV 文件"""
+    csv_dir.mkdir(parents=True, exist_ok=True)
     for table in TABLE_ORDER:
-        # DDL
-        ddl = conn.execute(
+        path = csv_dir / f"{table}.csv"
+        conn.execute(f"COPY {table} TO '{path}' (HEADER, DELIMITER ',')")
+        rows = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        print(f"  {table}: {rows} rows -> {path.name}")
+
+
+def export_init_sql(conn) -> str:
+    """生成 Init SQL（DDL + read_csv_auto）"""
+    parts = []
+    for table in TABLE_ORDER:
+        ddl_row = conn.execute(
             f"SELECT sql FROM duckdb_tables() WHERE table_name = '{table}'"
         ).fetchone()
-        if not ddl:
-            print(f"  跳过 {table}（不存在）")
+        if not ddl_row:
             continue
-        parts.append(f"-- === {table} ===")
-        parts.append(ddl[0] + ";")
+        ddl = ddl_row[0].rstrip(";")
+        rows = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        parts.append(f"-- {table} ({rows} rows)")
+        parts.append(f"{ddl};")
+        parts.append(
+            f"INSERT INTO {table} SELECT * FROM read_csv_auto("
+            f"'{CSV_CONTAINER_DIR}/{table}.csv', header=true);"
+        )
         parts.append("")
-
-        # INSERT 数据
-        rows = conn.execute(f"SELECT * FROM {table}").fetchall()
-        cols = [desc[0] for desc in conn.execute(f"SELECT * FROM {table} LIMIT 0").description]
-        col_names = ", ".join(cols)
-
-        for row in rows:
-            values = []
-            for v in row:
-                if v is None:
-                    values.append("NULL")
-                elif isinstance(v, bool):
-                    values.append("TRUE" if v else "FALSE")
-                elif isinstance(v, (int, float)):
-                    values.append(str(v))
-                else:
-                    # 转义单引号
-                    escaped = str(v).replace("'", "''")
-                    values.append(f"'{escaped}'")
-            parts.append(f"INSERT INTO {table} ({col_names}) VALUES ({', '.join(values)});")
-
-        parts.append("")
-        print(f"  {table}: {len(rows)} rows")
-
-    conn.close()
     return "\n".join(parts)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="从 DuckDB 导出 WrenAI Init SQL")
+    parser = argparse.ArgumentParser(description="导出 WrenAI Init SQL + CSV")
     parser.add_argument("--db", default=str(DEFAULT_DB), help="DuckDB 文件路径")
+    parser.add_argument("--csv-dir", default=str(DEFAULT_CSV_DIR),
+                        help="CSV 输出目录（默认 WrenAI/docker/data/csv/）")
     parser.add_argument("--output", "-o", default="telecom_init.sql",
-                        help="输出 SQL 文件路径（默认 telecom_init.sql）")
+                        help="Init SQL 输出路径（默认 telecom_init.sql）")
     args = parser.parse_args()
 
-    print("导出 Init SQL ...")
-    sql = export_init_sql(args.db)
-    line_count = sql.count("\n") + 1
-    print(f"  共 {line_count} 行")
+    conn = duckdb.connect(args.db, read_only=True)
+
+    print("1. 导出 CSV 文件 ...")
+    export_csv(conn, Path(args.csv_dir))
+
+    print("\n2. 生成 Init SQL ...")
+    sql = export_init_sql(conn)
+    conn.close()
 
     with open(args.output, "w") as f:
         f.write(sql)
-    print(f"\n已保存到 {args.output}")
-    print(f"下一步: 在 WrenAI UI 的 Init SQL 框中粘贴此文件内容")
+
+    line_count = sql.count("\n") + 1
+    print(f"   {line_count} 行 -> {args.output}")
+    print(f"""
+完成。下一步：
+  1. 确认 CSV 文件在 {args.csv_dir}
+  2. 启动 WrenAI: cd WrenAI/docker && docker compose --env-file .env.local up -d
+  3. 打开 http://localhost:3000
+  4. 选择 DuckDB，Display Name 填 telecom_nms
+  5. Init SQL 框粘贴 {args.output} 的内容（{line_count} 行）
+  6. Next → 全选 14 张表 → Submit
+""")
