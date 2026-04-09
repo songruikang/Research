@@ -18,9 +18,11 @@ data-agent/
 │
 ├── telecom/                           # 电信语义层
 │   ├── telecom_mdl.json               #   MDL 语义层定义（14表/356字段/29关系）
-│   ├── generate_mock_data.py          #   Mock 数据生成器
+│   ├── generate_mock_data.py          #   Mock 数据生成器（依赖 csv_to_ddl.py）
+│   ├── csv_to_ddl.py                  #   CSV 数据字典 → DDL（被 generate_mock_data 调用）
 │   ├── scripts/
-│   │   └── update_wren_metadata.py    #   WrenAI 导入脚本
+│   │   ├── update_wren_metadata.py    #   WrenAI 中文元数据导入（步骤 5c）
+│   │   └── export_init_sql.py         #   DuckDB → Init SQL 导出/注入（步骤 5b）
 │   └── __init__.py
 │
 ├── WrenAI/                            # WrenAI 源码（git submodule）
@@ -41,8 +43,9 @@ data-agent/
 
 | 文件 | 生成方式 | 说明 |
 |------|---------|------|
-| `telecom_nms.duckdb` | `cd telecom && python generate_mock_data.py` | 14 表 mock 数据 |
-| 时间戳刷新 | `python eval/refresh_timestamps.py` | 将 KPI 时间对齐到当前 |
+| `telecom_nms.duckdb` | `cd telecom && python generate_mock_data.py` | 14 表 mock 数据，约 16MB |
+| 时间戳刷新 | `python eval/refresh_timestamps.py` | 将 KPI 时间对齐到当前（每次评测前运行） |
+| `telecom_init.sql` | `python telecom/scripts/export_init_sql.py -o telecom_init.sql` | WrenAI Init SQL，约 21000 行（可选，也可用 --inject） |
 | `.venv/` | `uv venv --python 3.11` | Python 虚拟环境 |
 | `WrenAI/docker/.env.local` | 手动从 `.env.example` 复制并填写 | LLM API key |
 | `wren-ui-custom:latest` | `cd WrenAI/wren-ui && docker build -t wren-ui-custom:latest .` | 自定义 UI 镜像 |
@@ -117,15 +120,26 @@ docker compose --env-file .env.local up -d
 
 #### 5b. 在 UI 中连接 DuckDB 并导入表（首次部署必须做）
 
-这一步必须在 UI 中手动操作，无法跳过：
+WrenAI 使用内嵌 DuckDB，需要通过 **Init SQL** 把表结构和数据灌入。
 
+**准备 Init SQL:**
+```bash
+# 先确保 telecom_nms.duckdb 已生成（步骤 3）
+# 然后导出为 SQL 文件
+python telecom/scripts/export_init_sql.py --output telecom_init.sql
+# 或者直接通过 API 注入（WrenAI 已启动的情况下）:
+python telecom/scripts/export_init_sql.py --inject
+```
+
+**在 UI 中操作:**
 1. 打开 http://localhost:3000
 2. 选择数据源: **DuckDB**
-3. 上传数据库文件: 选择项目根目录下的 `telecom_nms.duckdb`
-   - 如果还没生成，先回到步骤 3 执行 `python telecom/generate_mock_data.py`
-4. 选择要导入的表: **全选 14 张表**（t_site, t_network_element, ...）
-5. 点击 "Submit" 完成导入
-6. 等待 WrenAI 自动建立 embedding 索引（约 1-2 分钟）
+3. 在 **Init SQL** 输入框中:
+   - 如果用了 `--inject`，这步已自动完成，Init SQL 框留空即可
+   - 如果没用 `--inject`，把 `telecom_init.sql` 的内容粘贴进去（约 21000 行，UI 可能卡顿，建议用 `--inject` 方式）
+4. 点击 "Next"，WrenAI 会解析出 14 张表
+5. **全选 14 张表**，点击 "Submit"
+6. 等待 WrenAI 建立 embedding 索引（约 1-2 分钟）
 
 此时 WrenAI 已经可以用了，但表的中文描述、关系、主键等元数据还是空的。
 
