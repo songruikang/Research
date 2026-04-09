@@ -94,6 +94,8 @@ python eval/eval_framework.py eval/exp0_opus_100q.json "opus_baseline"
 
 ### 步骤 5: WrenAI 部署（可选，需要 Docker）
 
+#### 5a. 构建 + 启动
+
 ```bash
 # 1. 构建自定义 UI 镜像（包含 Trace 日志页面改动）
 cd WrenAI/wren-ui
@@ -106,14 +108,46 @@ cp .env.example .env.local
 #   OPENAI_API_KEY=sk-xxx       # OpenAI 或 DeepSeek API key
 #   GENERATION_MODEL=gpt-4o     # 或 deepseek-chat
 
-# 3. 启动
+# 3. 启动所有容器
 docker compose --env-file .env.local up -d
 
-# 4. 导入电信语义层
-cd ../..
+# 4. 等待启动完成（约 30 秒），然后访问 UI
+#    http://localhost:3000
+```
+
+#### 5b. 在 UI 中连接 DuckDB 并导入表（首次部署必须做）
+
+这一步必须在 UI 中手动操作，无法跳过：
+
+1. 打开 http://localhost:3000
+2. 选择数据源: **DuckDB**
+3. 上传数据库文件: 选择项目根目录下的 `telecom_nms.duckdb`
+   - 如果还没生成，先回到步骤 3 执行 `python telecom/generate_mock_data.py`
+4. 选择要导入的表: **全选 14 张表**（t_site, t_network_element, ...）
+5. 点击 "Submit" 完成导入
+6. 等待 WrenAI 自动建立 embedding 索引（约 1-2 分钟）
+
+此时 WrenAI 已经可以用了，但表的中文描述、关系、主键等元数据还是空的。
+
+#### 5c. 导入中文语义层元数据
+
+```bash
+cd /path/to/Research/data-agent
 source .venv/bin/activate
 python telecom/scripts/update_wren_metadata.py
 ```
+
+这个脚本做的事：
+1. 从 Docker 容器中拷出 WrenAI 的 SQLite 数据库
+2. 用 `telecom/telecom_mdl.json` 中的信息更新：
+   - 每张表的中文名称和描述
+   - 每个字段的中文名称、描述、类型、主键、非空标记
+   - 29 条表间关系（含中文描述）
+3. 拷回容器并重启 wren-ui
+4. 触发 MDL 重新部署（重建向量索引）
+5. 执行一条 JOIN 查询验证导入成功
+
+**前提**: 步骤 5b 已完成（UI 中已导入 14 张表），否则脚本找不到表记录会失败。
 
 WrenAI UI: http://localhost:3000
 
