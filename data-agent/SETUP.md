@@ -1,79 +1,129 @@
 # 新环境部署指南
 
-## 1. 克隆仓库
+## 目录结构
+
+```
+data-agent/
+├── docs/                              # 研究文档
+│   ├── NL2SQL_Research_Landscape.md   #   NL2SQL 领域全景分析
+│   ├── DataAgent_Technical_Guide.md   #   二次开发技术指引
+│   └── NL2SQL_100Q_TestReport.md      #   100 题评测报告
+│
+├── eval/                              # 评测体系
+│   ├── eval_framework.py              #   评测框架（三级判定：正确/错误/无法验证）
+│   ├── refresh_timestamps.py          #   时间戳刷新脚本（每次评测前运行）
+│   ├── telecom_test_cases_100.json    #   100 道测试用例
+│   ├── exp0_opus_100q.json            #   Opus 零知识基线生成的 SQL
+│   └── eval_result_opus_100q.json     #   Opus 评测详细结果
+│
+├── telecom/                           # 电信语义层
+│   ├── telecom_mdl.json               #   MDL 语义层定义（14表/356字段/29关系）
+│   ├── generate_mock_data.py          #   Mock 数据生成器
+│   ├── scripts/
+│   │   └── update_wren_metadata.py    #   WrenAI 导入脚本
+│   └── __init__.py
+│
+├── WrenAI/                            # WrenAI 源码（git submodule）
+│   ├── docker/
+│   │   ├── docker-compose.yaml        #   [有自定义改动] 搜索 "[自定义]" 查看改动说明
+│   │   └── .env.local                 #   [需手动创建] LLM API key 等配置
+│   └── wren-ui/                       #   [有自定义改动] Trace 日志页面等 UI 改动
+│
+├── SETUP.md                           # 本文件
+├── pyproject.toml                     # Python 项目配置
+├── .gitignore
+├── .env                               # [不提交] 本地环境变量
+├── telecom_nms.duckdb                 # [不提交] DuckDB 数据库，需生成
+└── sample.duckdb                      # [不提交] 早期 demo 数据库，可忽略
+```
+
+## 需要生成的文件（不在 git 中）
+
+| 文件 | 生成方式 | 说明 |
+|------|---------|------|
+| `telecom_nms.duckdb` | `cd telecom && python generate_mock_data.py` | 14 表 mock 数据 |
+| 时间戳刷新 | `python eval/refresh_timestamps.py` | 将 KPI 时间对齐到当前 |
+| `.venv/` | `uv venv --python 3.11` | Python 虚拟环境 |
+| `WrenAI/docker/.env.local` | 手动从 `.env.example` 复制并填写 | LLM API key |
+| `wren-ui-custom:latest` | `cd WrenAI/wren-ui && docker build -t wren-ui-custom:latest .` | 自定义 UI 镜像 |
+
+## 部署步骤
+
+### 步骤 1: 克隆仓库
 
 ```bash
 git clone --recursive git@github.com:songruikang/Research.git
 cd Research/data-agent
 ```
 
-`--recursive` 会自动拉取 WrenAI submodule。如果已经 clone 但没拉 submodule：
-
+如果已 clone 但没拉 submodule：
 ```bash
 git submodule update --init --recursive
 ```
 
-## 2. Python 环境（评测体系）
+### 步骤 2: Python 环境
 
 ```bash
-# 安装 uv（Python 包管理器）
+# 安装 uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 创建虚拟环境 + 安装依赖
+# 创建虚拟环境
 uv venv --python 3.11
-source .venv/bin/activate
+source .venv/bin/activate    # Linux/Mac
+# .venv\Scripts\activate     # Windows
+
+# 安装依赖
 uv pip install duckdb pytz
 ```
 
-## 3. 准备 DuckDB 数据库
-
-数据库文件（.duckdb）在 .gitignore 中不会被提交，需要重新生成：
+### 步骤 3: 生成数据库
 
 ```bash
-# 生成 mock 数据（14表，含 KPI 性能数据）
 cd telecom
-python generate_mock_data.py
+python generate_mock_data.py    # 生成 telecom_nms.duckdb（约 16MB）
 cd ..
 
-# 刷新时间戳到当前时间（否则时间窗口查询无数据）
-python refresh_timestamps.py
+python eval/refresh_timestamps.py    # 刷新时间戳到当前时间
 ```
 
-## 4. 运行评测
+### 步骤 4: 运行评测（不需要 WrenAI）
 
 ```bash
-# 用 Opus 基线 SQL 跑评测
-python eval_framework.py exp0_opus_100q.json "opus_baseline"
+python eval/eval_framework.py eval/exp0_opus_100q.json "opus_baseline"
 ```
 
-输出包含三级指标：
-- 可执行率（SQL 语法是否正确）
-- 严格准确率（结果集完全匹配）
-- 可验证准确率（排除双方都返回 0 行的题）
-
-## 5. WrenAI 部署（如果需要 UI）
+### 步骤 5: WrenAI 部署（可选，需要 Docker）
 
 ```bash
-cd WrenAI/docker
+# 1. 构建自定义 UI 镜像（包含 Trace 日志页面改动）
+cd WrenAI/wren-ui
+docker build -t wren-ui-custom:latest .
 
-# 配置环境变量
+# 2. 配置环境变量
+cd ../docker
 cp .env.example .env.local
-# 编辑 .env.local，填入 LLM API key：
-#   OPENAI_API_KEY=sk-xxx   （兼容 DeepSeek/OpenAI）
+# 编辑 .env.local，填入:
+#   OPENAI_API_KEY=sk-xxx       # OpenAI 或 DeepSeek API key
+#   GENERATION_MODEL=gpt-4o     # 或 deepseek-chat
 
-# 启动所有服务（约 6 个容器）
+# 3. 启动
 docker compose --env-file .env.local up -d
 
-# 导入电信语义层到 WrenAI
+# 4. 导入电信语义层
 cd ../..
-python update_wren_metadata.py
+source .venv/bin/activate
+python telecom/scripts/update_wren_metadata.py
 ```
 
-WrenAI UI 访问地址：http://localhost:3000
+WrenAI UI: http://localhost:3000
 
-## 6. 如果只跑评测不需要 WrenAI
+### Docker Compose 自定义改动说明
 
-只需要步骤 1-4，不需要 Docker。核心依赖就两个：`duckdb` 和 `pytz`。
+docker-compose.yaml 中所有自定义改动都标注了 `[自定义]` 注释，主要包括：
+
+1. **资源限制** — 所有容器加了 CPU/内存限制，防止 Mac 上内存占满
+2. **端口映射** — engine 和 ibis-server 改为仅 expose，不映射到宿主机（只有 UI 和 AI service 需要外部访问）
+3. **UI 镜像** — 从官方镜像改为 `wren-ui-custom:latest`（包含 Trace 日志等 UI 改动）
 
 ## 快速验证
 
@@ -84,22 +134,14 @@ python -c "import duckdb; c=duckdb.connect('telecom_nms.duckdb'); print(c.execut
 # 2. 时间窗口有数据（应输出 >0）
 python -c "import duckdb; c=duckdb.connect('telecom_nms.duckdb'); print(c.execute('SELECT COUNT(*) FROM t_ne_perf_kpi WHERE collect_time >= CURRENT_TIMESTAMP - INTERVAL 24 HOUR').fetchone())"
 
-# 3. 评测能跑（应输出完整报告）
-python eval_framework.py exp0_opus_100q.json test
+# 3. 评测能跑
+python eval/eval_framework.py eval/exp0_opus_100q.json verify
 ```
 
-## 文件说明
+## 公司环境注意事项
 
-| 文件 | 用途 |
-|------|------|
-| `telecom_test_cases_100.json` | 100 道测试用例 |
-| `eval_framework.py` | 评测框架 |
-| `refresh_timestamps.py` | 时间戳刷新脚本（每次评测前运行） |
-| `exp0_opus_100q.json` | Opus 零知识基线生成的 SQL |
-| `eval_result_opus_100q.json` | Opus 评测详细结果 |
-| `NL2SQL_100Q_TestReport.md` | 100 题完整测试报告 |
-| `NL2SQL_Research_Landscape.md` | NL2SQL 领域全景分析 |
-| `DataAgent_Technical_Guide.md` | 二次开发技术指引 |
-| `telecom_mdl.json` | 语义层 MDL 定义 |
-| `update_wren_metadata.py` | WrenAI 导入脚本 |
-| `telecom/generate_mock_data.py` | Mock 数据生成器 |
+如果在防火墙内部署：
+- Docker 镜像拉取可能需要配置代理或使用镜像仓库
+- LLM API 需要确认公司网络可达（DeepSeek 国内直连，OpenAI 需代理）
+- `uv` 安装如果被墙，可以用 `pip install duckdb pytz` 替代
+- WrenAI 的 Qdrant 向量库不需要外网，纯本地运行

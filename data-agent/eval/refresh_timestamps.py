@@ -16,6 +16,7 @@
 import duckdb
 import argparse
 import sys
+from pathlib import Path
 
 
 # ── 需要刷新的表和字段 ──
@@ -164,7 +165,8 @@ def refresh(db_path, dry_run=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="刷新 mock 数据时间戳")
-    parser.add_argument("--db", default="telecom_nms.duckdb", help="DuckDB 文件路径")
+    default_db = str(Path(__file__).resolve().parent.parent / "telecom_nms.duckdb")
+    parser.add_argument("--db", default=default_db, help="DuckDB 文件路径")
     parser.add_argument("--dry-run", action="store_true", help="只显示 SQL 不执行")
     args = parser.parse_args()
 

@@ -10,6 +10,9 @@ import duckdb
 import sys
 from pathlib import Path
 
+# 项目根目录（eval/ 的上一级）
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 
 # ─── DDL 提取 ───
 
@@ -232,25 +235,33 @@ def print_report(eval_result: dict, experiment_name: str = ""):
 
 if __name__ == "__main__":
     # 用法: python eval_framework.py <generated_sqls.json> [experiment_name]
+    eval_dir = Path(__file__).resolve().parent
+    db_path = str(PROJECT_ROOT / "telecom_nms.duckdb")
+    mdl_path = str(PROJECT_ROOT / "telecom" / "telecom_mdl.json")
+    test_cases_path = str(eval_dir / "telecom_test_cases_100.json")
+
     if len(sys.argv) < 2:
         # 默认模式：只生成 DDL
-        ddl = mdl_to_ddl("telecom_mdl.json")
+        ddl = mdl_to_ddl(mdl_path)
         print(ddl)
         sys.exit(0)
 
     generated_file = sys.argv[1]
+    # 如果是相对路径，相对于 eval/ 目录
+    if not Path(generated_file).is_absolute():
+        generated_file = str(eval_dir / generated_file)
     exp_name = sys.argv[2] if len(sys.argv) > 2 else "unnamed"
 
-    with open("telecom_test_cases_100.json") as f:
+    with open(test_cases_path) as f:
         test_cases = json.load(f)
     with open(generated_file) as f:
         generated_sqls = json.load(f)
 
-    result = run_evaluation(test_cases, generated_sqls, "telecom_nms.duckdb")
+    result = run_evaluation(test_cases, generated_sqls, db_path)
     print_report(result, exp_name)
 
-    # 保存详细结果
-    output_file = f"eval_result_{exp_name}.json"
+    # 保存详细结果到 eval/ 目录
+    output_file = str(eval_dir / f"eval_result_{exp_name}.json")
     with open(output_file, "w") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     print(f"详细结果已保存到 {output_file}")
