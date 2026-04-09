@@ -13,7 +13,7 @@
   │
   │  GraphQL
   ▼
-Next.js (wren-ui)          ← 前端 + GraphQL 网关，不做 AI 逻辑
+Next.j![[deep-research-report]]s (wren-ui)          ← 前端 + GraphQL 网关，不做 AI 逻辑
   │
   │  HTTP REST
   ▼
