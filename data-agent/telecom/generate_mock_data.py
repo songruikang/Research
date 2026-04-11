@@ -8,6 +8,7 @@ Usage:
 
 import json
 import random
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -84,6 +85,9 @@ CUSTOMER_NAMES = [
     "启明星辰安全", "浩瀚传媒", "鼎盛化工", "长城汽车", "锦绣文旅",
 ]
 
+# Pre-generated customer UUIDs (30 customers, indexed 0-29)
+CUSTOMER_UUIDS = [str(uuid.uuid4()) for _ in range(30)]
+
 
 # ---------------------------------------------------------------------------
 # Helper utilities
@@ -155,7 +159,7 @@ def _generate_sites():
 
     for i, (region, city) in enumerate(all_cities):
         code = CITY_CODES[city]
-        site_id = f"SITE-{code}-001"
+        site_id = str(uuid.uuid4())
         site_type = site_types_pool[i]
         tier = tier_map[city]
         lng, lat = CITY_COORDS[city]
@@ -257,7 +261,7 @@ def _generate_network_elements(sites):
             role_counter[code][role] += 1
             seq = role_counter[code][role]
 
-            ne_id = f"NE-{code}-{role}{seq:02d}"
+            ne_id = str(uuid.uuid4())
             ne_name = f"{code}-CORE-{role}{seq:02d}"
             management_ip = f"10.{region_n}.{site_i+1}.{j+1}"
             loopback_ipv4 = f"1.1.{ne_idx+1}.1" if role in ("PE", "P") else None
@@ -335,7 +339,7 @@ def _generate_boards(ne_list):
     for i, ne in enumerate(ne_list):
         ne_id = ne["ne_id"]
         for j in range(3):
-            board_id = f"BRD-{i*3+j+1:04d}"
+            board_id = str(uuid.uuid4())
             board_type = "MPU" if j == 0 else "LPU"
             slot = f"{j*2+1}/0"
 
@@ -408,7 +412,7 @@ def _generate_interfaces(ne_list, board_list):
 
         for j in range(n_ifs):
             if_seq += 1
-            if_id = f"IF-{if_seq:04d}"
+            if_id = str(uuid.uuid4())
 
             # Assign type
             if ne_id in q05_nes and j < 12:
@@ -550,7 +554,7 @@ def _generate_physical_links(ne_list, if_list, vpn_list_for_links=None):
         used_if_ids.add(b_if_id)
 
         link_seq += 1
-        link_id = f"LINK-{link_seq:03d}"
+        link_id = str(uuid.uuid4())
 
         a_ne = ne_lookup[a_ne_id]
         b_ne = ne_lookup[b_ne_id]
@@ -618,7 +622,7 @@ def _generate_vrf_instances(ne_list):
         n_vrfs = random.choice([5, 6, 6, 6, 7])  # 5-7 per PE to reach ~120 total
         for j in range(n_vrfs):
             vrf_seq += 1
-            vrf_id = f"VRF-{vrf_seq:03d}"
+            vrf_id = str(uuid.uuid4())
             cust_name = CUSTOMER_NAMES[(vrf_seq - 1) % len(CUSTOMER_NAMES)]
             vrf_name = f"vpn_{cust_name.lower().replace(' ', '_')}"
 
@@ -646,7 +650,7 @@ def _generate_vrf_instances(ne_list):
                 random.choice(["NONE", "L3"]),
                 max_routes, current_routes,
                 random.randint(1, 8),
-                f"CUST-{(vrf_seq-1)%30+1:03d}",
+                CUSTOMER_UUIDS[(vrf_seq-1) % 30],
                 cust_name,
                 random.choice(["MPLS_VPN", "CLOUD_CONNECT", "INTERNET"]),
                 admin_status, oper_status,
@@ -683,7 +687,7 @@ def _generate_l3vpn_services():
 
     for i in range(30):
         vpn_seq = i + 1
-        vpn_id = f"VPN-{vpn_seq:03d}"
+        vpn_id = str(uuid.uuid4())
         level = levels[i]
         cust_name = CUSTOMER_NAMES[i % len(CUSTOMER_NAMES)]
 
@@ -733,7 +737,7 @@ def _generate_l3vpn_services():
             f"{cust_name}-VPN",
             "L3VPN",
             random.choice(["ANY_TO_ANY", "HUB_SPOKE", "P2P"]),
-            f"CUST-{i%30+1:03d}",
+            CUSTOMER_UUIDS[i % 30],
             cust_name,
             level,
             bw,
@@ -817,7 +821,7 @@ def _generate_vpn_pe_bindings(vpn_list, ne_list, vrf_list, if_list):
             used_if_ids.add(chosen_if)
 
             bind_seq += 1
-            binding_id = f"BIND-{bind_seq:03d}"
+            binding_id = str(uuid.uuid4())
 
             rows.append((
                 binding_id,
@@ -889,7 +893,7 @@ def _generate_srv6_policies(ne_list):
 
     for i in range(50):
         pol_seq = i + 1
-        policy_id = f"POL-{pol_seq:03d}"
+        policy_id = str(uuid.uuid4())
 
         source_ne = random.choice(pes_with_policies) if pes_with_policies else random.choice(pe_nes)
         # Pick a different PE as destination
@@ -969,7 +973,7 @@ def _generate_tunnels(ne_list, policy_list, vpn_list):
 
     for i in range(80):
         tun_seq = i + 1
-        tunnel_id = f"TUN-{tun_seq:03d}"
+        tunnel_id = str(uuid.uuid4())
         tunnel_type = tunnel_types[i]
 
         source_ne = random.choice(pe_nes)
@@ -1006,7 +1010,7 @@ def _generate_tunnels(ne_list, policy_list, vpn_list):
             dest_ne["ne_id"],
             f"2001:DB8:{dest_ne['ne_idx']+1:X}::1" if "SRV6" in tunnel_type else dest_ne.get("ne_id"),
             policy_id,
-            f"IF-TUN-{tun_seq:03d}",
+            str(uuid.uuid4()),
             bandwidth,
             measured_latency,
             measured_jitter,

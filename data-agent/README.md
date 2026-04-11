@@ -29,16 +29,24 @@ data-agent/
 ├── WrenAI/                            # WrenAI源码（git submodule）
 │   ├── docker/
 │   │   ├── docker-compose.yaml        #   搜索 [自定义] 看改动
-│   │   ├── .env                       #   ★ 必改：PLATFORM、API Key
-│   │   ├── config.yaml                #   ★ 必改：LLM模型、Embedding
-│   │   └── data/                      #   CSV数据文件（volume挂载到容器）
-│   └── wren-ui/                       #   UI源码（有Trace日志改动）
+│   │   ├── .env                       #   ★ 必改：PLATFORM、API Key、推荐开关
+│   │   ├── config.yaml                #   ★ 必改：LLM模型、Embedding、Pipeline开关
+│   │   ├── trace_callback.py          #   LLM调用追踪回调（挂载到ai-service容器）
+│   │   └── data/                      #   CSV数据文件 + LLM Trace 日志
+│   └── wren-ui/                       #   UI源码（Trace日志页面 + 推荐开关）
 │
 ├── README.md                          # 本文件
 ├── PROJECT_CONTEXT.md                 # 发给AI助手的项目背景
 ├── pyproject.toml
 └── .gitignore
 ```
+
+### 数据模型说明
+
+- 14 张表，共 21086 行 mock 数据
+- 所有实体 ID（site_id, ne_id, vpn_id 等）使用 **UUID** 格式
+- KPI 表的 kpi_id 使用 BIGINT 自增
+- 名称字段（ne_name, site_name 等）保持中文可读
 
 ### 不在 git 中、需要生成的文件
 
@@ -99,10 +107,10 @@ cp .env.example .env    # 如果没有就从下面模板创建
 | `PLATFORM` | **是** | Mac ARM填 `linux/arm64`，x86服务器填 `linux/amd64` | `linux/amd64` |
 | `OPENAI_API_KEY` | **是** | LLM API Key（OpenAI/DeepSeek通用） | `sk-xxx` |
 | `GENERATION_MODEL` | 建议改 | UI显示用的模型名 | `gpt-4o` |
+| `ENABLE_RECOMMENDATION_QUESTIONS` | **建议关** | deploy后自动生成推荐问题，本地大模型慢会堵队列 | `false` |
 | `HOST_PORT` | 看需要 | UI对外端口 | `3000` |
 | `AI_SERVICE_FORWARD_PORT` | 看需要 | AI Service对外端口 | `5555` |
 | `TELEMETRY_ENABLED` | 建议关 | 遥测上报 | `false` |
-| `PLATFORM` | **公司环境必改** | Mac是arm64，公司Ubuntu通常是amd64 | - |
 
 #### `config.yaml` 文件必改项
 
@@ -238,10 +246,12 @@ docker compose up -d wren-ui
 | 改了什么 | 操作 | 命令 |
 |---------|------|------|
 | `.env` 里的 API Key | 重启ai-service | `docker compose restart wren-ai-service` |
+| `.env` 里的 `ENABLE_RECOMMENDATION_QUESTIONS` | 重启wren-ui | `docker compose up -d wren-ui` |
 | `config.yaml` 里的 LLM 模型 | 重启ai-service | `docker compose restart wren-ai-service` |
 | `config.yaml` 里的 Embedding 模型 | 重启ai-service + **重新部署** | 重启后在UI点 "Deploy" 重建索引 |
 | `config.yaml` 里的 settings 开关 | 重启ai-service | `docker compose restart wren-ai-service` |
 | `data/*.csv` 数据文件 | 全量清库重来 | 见第三节 |
+| `trace_callback.py` | 重启ai-service | `docker compose restart wren-ai-service` |
 | `wren-ui/` 前端代码 | **重新构建镜像** | `docker build -t wren-ui-custom:latest WrenAI/wren-ui/ && docker compose up -d wren-ui` |
 | `docker-compose.yaml` | 重建容器 | `docker compose up -d` |
 | `.env` 里的端口号 | 重建容器 | `docker compose up -d` |
@@ -269,6 +279,23 @@ docker compose down
 docker compose down -v
 ```
 
+### LLM 调用追踪（Trace）
+
+UI 的 Logs 页面可查看每次 LLM 调用的 prompt、response、token 消耗和耗时。
+
+**原理：** `trace_callback.py` 以 `sitecustomize.py` 方式挂载到 ai-service 容器，Python 启动时自动加载，通过 litellm 回调拦截所有 LLM 调用，写入 `data/llm_traces.jsonl`。wren-ui 通过共享 volume 读取。
+
+```
+ai-service 容器: litellm → trace_callback.py → /app/data/llm_traces.jsonl
+                                                    ↓ (host: WrenAI/docker/data/)
+wren-ui 容器:    /api/traces → 读 /app/llm_data/llm_traces.jsonl → Logs 页面展示
+```
+
+**清空 Trace 日志：**
+```bash
+> WrenAI/docker/data/llm_traces.jsonl
+```
+
 ---
 
 ## 五、WrenAI Pipeline 开关说明
@@ -286,7 +313,13 @@ docker compose down -v
 | `query_cache_maxsize` | `1000` | 查询缓存大小 | 1000 |
 | `query_cache_ttl` | `3600` | 缓存过期秒数 | 3600 |
 | `logging_level` | `INFO` | 日志级别 | 调试时改`DEBUG` |
-| `langfuse_enable` | `false` | LLM调用追踪 | 需要Langfuse服务 |
+| `langfuse_enable` | `false` | LLM调用追踪（需Langfuse服务） | 不需要，已有自定义Trace |
+
+**`.env` 中的 UI 开关：**
+
+| 变量 | 默认值 | 作用 | 建议 |
+|------|--------|------|------|
+| `ENABLE_RECOMMENDATION_QUESTIONS` | `true` | deploy后自动调LLM生成推荐问题 | 本地大模型设`false` |
 
 ---
 
