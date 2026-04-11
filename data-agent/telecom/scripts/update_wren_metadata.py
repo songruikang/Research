@@ -24,9 +24,12 @@ import time
 # ---------------------------------------------------------------------------
 # 配置
 # ---------------------------------------------------------------------------
+# scripts/ → telecom/ → data-agent/
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-MDL_PATH = os.path.join(SCRIPT_DIR, "telecom_mdl.json")
-LOCAL_DB = os.path.join(SCRIPT_DIR, "wren_ui_db.sqlite3")
+TELECOM_DIR = os.path.dirname(SCRIPT_DIR)
+PROJECT_ROOT = os.path.dirname(TELECOM_DIR)
+MDL_PATH = os.path.join(TELECOM_DIR, "telecom_mdl.json")
+LOCAL_DB = os.path.join(PROJECT_ROOT, "wren_ui_db.sqlite3")
 CONTAINER = "wrenai-wren-ui-1"
 REMOTE_DB = "/app/data/db.sqlite3"
 GRAPHQL_URL = "http://localhost:3000/api/graphql"
