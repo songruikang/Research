@@ -27,8 +27,10 @@ except ImportError:
     print("需要安装 duckdb: pip install duckdb")
     sys.exit(1)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-DEFAULT_DB = PROJECT_ROOT / "telecom_nms.duckdb"
+TELECOM_DIR = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = TELECOM_DIR.parent
+OUTPUT_DIR = TELECOM_DIR / "output"
+DEFAULT_DB = OUTPUT_DIR / "telecom_nms.duckdb"
 # CSV 文件存放在 WrenAI/docker/data/，通过 docker-compose volume 挂载到容器
 DEFAULT_CSV_DIR = PROJECT_ROOT / "WrenAI" / "docker" / "data"
 
@@ -91,8 +93,8 @@ if __name__ == "__main__":
     parser.add_argument("--db", default=str(DEFAULT_DB), help="DuckDB 文件路径")
     parser.add_argument("--csv-dir", default=str(DEFAULT_CSV_DIR),
                         help="CSV 输出目录（默认 WrenAI/docker/data/csv/）")
-    parser.add_argument("--output", "-o", default="telecom_init.sql",
-                        help="Init SQL 输出路径（默认 telecom_init.sql）")
+    parser.add_argument("--output", "-o", default=str(OUTPUT_DIR / "telecom_init.sql"),
+                        help="Init SQL 输出路径")
     args = parser.parse_args()
 
     conn = duckdb.connect(args.db, read_only=True)

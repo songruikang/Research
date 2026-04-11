@@ -1,0 +1,357 @@
+table,column,english_term,chinese_desc,data_type,nullable,default,example_values,domain,foreign_key,source_ref
+t_site,site_id,Site ID,站点唯一标识,VARCHAR(64),NO,-,"SITE-BJ-001;SITE-SH-001",PK,-,-
+t_site,site_name,Site Name,站点名称,VARCHAR(128),NO,-,"北京亦庄DC-01;上海嘉定POP-03",文本,-,-
+t_site,site_code,Site Code,站点编码（全局唯一简码）,VARCHAR(32),NO,-,"BJ-YZ-DC01;SH-JD-POP03",UNIQUE,-,-
+t_site,site_type,Site Type,"站点类型：DC(数据中心)、POP(接入点)、CO(中心机房)、COLO(托管)、EDGE(边缘)",VARCHAR(32),NO,-,"DC;POP;CO;COLO;EDGE",枚举,-,-
+t_site,region,Region,所属大区（用于区域维度聚合）,VARCHAR(64),NO,-,"华北;华东;华南;西南;东北",文本,-,-
+t_site,province,Province,省份,VARCHAR(32),NO,-,"北京;上海;广东",文本,-,-
+t_site,city,City,城市,VARCHAR(32),NO,-,"北京;上海;广州;深圳",文本,-,-
+t_site,address,Address,详细地址,VARCHAR(256),YES,-,"亦庄经济开发区XX路XX号",文本,-,-
+t_site,longitude,Longitude,经度（WGS84）,DECIMAL(10.7),YES,-,"116.5095700;121.4737000",度,-,-
+t_site,latitude,Latitude,纬度（WGS84）,DECIMAL(10.7),YES,-,"39.7952100;31.2304000",度,-,-
+t_site,tier,Tier,"站点等级：TIER1为核心枢纽，TIER3为末梢接入",VARCHAR(16),NO,-,"TIER1;TIER2;TIER3",枚举,-,参考TIA-942
+t_site,total_rack_count,Total Rack Count,该站点总机柜数量,INT,YES,0,"200;48",≥0,-,-
+t_site,used_rack_count,Used Rack Count,已使用的机柜数量,INT,YES,0,"150;32",≥0,-,-
+t_site,power_capacity_kw,Power Capacity (kW),站点总供电容量,DECIMAL(10.2),YES,-,"2000.00;500.00",kW,-,-
+t_site,cooling_type,Cooling Type,制冷方式,VARCHAR(32),YES,-,"AIR;LIQUID;HYBRID",枚举,-,-
+t_site,operator,Operator,站点运营商或承建方,VARCHAR(64),YES,-,"中国电信;万国数据",文本,-,-
+t_site,contact_person,Contact Person,站点联系人,VARCHAR(64),YES,-,"张工",文本,-,-
+t_site,contact_phone,Contact Phone,联系电话,VARCHAR(32),YES,-,"13800138000",文本,-,-
+t_site,commissioning_date,Commissioning Date,站点投产日期,DATE,YES,-,"2023-06-15",日期,-,-
+t_site,contract_expire_date,Contract Expire Date,机房租赁合同到期日,DATE,YES,-,"2028-06-15",日期,-,-
+t_site,status,Status,站点状态,VARCHAR(16),NO,ACTIVE,"ACTIVE;DECOMMISSIONED;PLANNED",枚举,-,-
+t_site,description,Description,备注,VARCHAR(512),YES,-,"一期已满二期扩建中",文本,-,-
+t_network_element,ne_id,Network Element ID,网元唯一标识,VARCHAR(64),NO,-,"NE-BJ-PE01;NE-SH-P01",PK,-,-
+t_network_element,ne_name,NE Name,网元名称（通常含地域和角色信息）,VARCHAR(128),NO,-,"BJ-CORE-PE01;SH-CORE-P01",文本,-,-
+t_network_element,ne_type,NE Type,设备硬件类型,VARCHAR(32),NO,-,"ROUTER;SWITCH;FIREWALL;OTN",枚举,-,-
+t_network_element,vendor,Vendor,设备厂商,VARCHAR(32),NO,-,"HUAWEI;CISCO;ZTE;JUNIPER",枚举,-,-
+t_network_element,model,Model,设备型号,VARCHAR(64),NO,-,"NE40E-X16A;ASR9000;NE5000E",文本,-,华为/思科产品线
+t_network_element,software_version,Software Version,设备操作系统版本,VARCHAR(64),YES,-,"V800R023C10;IOS-XR 7.7.2",文本,-,-
+t_network_element,patch_version,Patch Version,热补丁版本,VARCHAR(64),YES,-,"SPC300;SMU-2024Q2",文本,-,-
+t_network_element,role,Role,"网元在IP骨干网中的角色：PE(Provider Edge直连客户承载VPN)、P(骨干转发)、CE(客户侧)、RR(路由反射器)、ASBR(域边界)",VARCHAR(16),NO,-,"PE;P;CE;RR;ASBR;ABR",枚举,-,RFC 4364
+t_network_element,management_ip,Management IP,设备带外管理IP地址（SSH/NETCONF登录用）,VARCHAR(64),NO,-,"10.10.1.11;10.10.2.21",IPv4/IPv6,-,-
+t_network_element,loopback_ipv4,Loopback IPv4,Loopback0接口IPv4地址（通常作为Router-ID和BGP邻居地址）,VARCHAR(32),YES,-,"1.1.1.1;2.2.2.2",IPv4,-,-
+t_network_element,loopback_ipv6,Loopback IPv6,Loopback0接口IPv6地址（SRv6场景关联Locator）,VARCHAR(64),YES,-,"2001:DB8::1;2001:DB8::2",IPv6,-,-
+t_network_element,router_id,Router-ID,OSPF/BGP的Router-ID（通常等于loopback_ipv4）,VARCHAR(32),YES,-,"1.1.1.1",IPv4,-,RFC 2328
+t_network_element,as_number,AS Number,所属BGP自治系统号,BIGINT,YES,-,"65000;4200000001",正整数,-,RFC 6793
+t_network_element,isis_system_id,IS-IS System ID,IS-IS协议系统标识符（6字节点分十进制）,VARCHAR(32),YES,-,"0100.0000.0001",NET格式,-,ISO 10589
+t_network_element,isis_area_id,IS-IS Area ID,IS-IS区域标识,VARCHAR(32),YES,-,"49.0001",文本,-,ISO 10589
+t_network_element,srv6_locator,SRv6 Locator,"SRv6 Locator前缀，标识设备在SRv6网络中的可达地址段",VARCHAR(64),YES,-,"2001:DB8:100::/48;2001:DB8:200::/48",IPv6前缀,-,RFC 8986
+t_network_element,mpls_enabled,MPLS Enabled,是否使能MPLS转发,BOOLEAN,YES,FALSE,"TRUE;FALSE",布尔,-,-
+t_network_element,srv6_enabled,SRv6 Enabled,是否使能SRv6(Segment Routing over IPv6),BOOLEAN,YES,FALSE,"TRUE;FALSE",布尔,-,-
+t_network_element,netconf_enabled,NETCONF Enabled,是否使能NETCONF协议（自动化配置管理）,BOOLEAN,YES,FALSE,"TRUE;FALSE",布尔,-,RFC 6241
+t_network_element,telemetry_enabled,Telemetry Enabled,是否使能Telemetry流式遥测（性能数据实时上报）,BOOLEAN,YES,FALSE,"TRUE;FALSE",布尔,-,-
+t_network_element,site_id,Site ID,所属站点ID,VARCHAR(64),YES,-,"SITE-BJ-001",FK,t_site.site_id,-
+t_network_element,rack_position,Rack Position,机柜位置,VARCHAR(32),YES,-,"A03-U20;B01-U05",文本,-,-
+t_network_element,serial_number,Serial Number,设备序列号（厂商出厂编号）,VARCHAR(64),YES,-,"2102351GBR10KA000023",文本,-,-
+t_network_element,asset_id,Asset ID,企业内部资产编号,VARCHAR(64),YES,-,"ASSET-2024-00156",文本,-,-
+t_network_element,commissioning_date,Commissioning Date,设备上线日期,DATE,YES,-,"2024-03-15",日期,-,-
+t_network_element,maintenance_expire,Maintenance Expire,维保合同到期日,DATE,YES,-,"2027-03-15",日期,-,-
+t_network_element,admin_status,Admin Status,管理状态（运维人员手动设置）,VARCHAR(16),NO,UP,"UP;DOWN;TESTING",枚举,-,IF-MIB ifAdminStatus
+t_network_element,oper_status,Oper Status,运行状态（系统自动检测）,VARCHAR(16),NO,UP,"UP;DOWN;DEGRADED",枚举,-,IF-MIB ifOperStatus
+t_network_element,description,Description,备注,VARCHAR(512),YES,-,"核心PE承载GOLD级VPN",文本,-,-
+t_network_element,created_at,Created At,创建时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:00:00",时间戳,-,-
+t_network_element,updated_at,Updated At,更新时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:10:00",时间戳,-,-
+t_board,board_id,Board ID,单板唯一标识,VARCHAR(64),NO,-,"BRD-001",PK,-,-
+t_board,ne_id,NE ID,所属网元ID,VARCHAR(64),NO,-,"NE-BJ-PE01",FK,t_network_element.ne_id,-
+t_board,slot_number,Slot Number,槽位号（板卡在机框中的物理位置）,VARCHAR(16),NO,-,"1/0;3/0;5/0",文本,-,-
+t_board,board_type,Board Type,"单板类型：MPU(主控板)、LPU(业务线卡)、SFU(交换网板)、FAN(风扇)、PWR(电源)",VARCHAR(32),NO,-,"MPU;LPU;SFU;FAN;PWR",枚举,-,华为NE设备架构
+t_board,board_name,Board Name,单板型号名称,VARCHAR(128),YES,-,"CR5D00L4XF90;CR5DMPUA10",文本,-,-
+t_board,hardware_version,Hardware Version,硬件版本,VARCHAR(64),YES,-,"VER.B",文本,-,-
+t_board,firmware_version,Firmware Version,固件版本,VARCHAR(64),YES,-,"V200R001",文本,-,-
+t_board,serial_number,Serial Number,单板序列号,VARCHAR(64),YES,-,"210235G7HK10KA000012",文本,-,-
+t_board,port_count,Port Count,该单板提供的端口数量,INT,YES,0,"36;4;0",≥0,-,-
+t_board,port_type,Port Type,端口物理类型,VARCHAR(32),YES,-,"100GE;400GE;10GE",枚举,-,-
+t_board,forwarding_capacity_gbps,Forwarding Capacity (Gbps),单板转发处理能力,DECIMAL(10.2),YES,-,"3600.00;1200.00",Gbps,-,-
+t_board,memory_total_mb,Memory Total (MB),单板内存总量,INT,YES,-,"32768;16384",MB,-,-
+t_board,temperature_threshold,Temperature Threshold (°C),温度告警阈值,DECIMAL(5.2),YES,-,"75.00;85.00",°C,-,-
+t_board,power_consumption_w,Power Consumption (W),额定功耗,DECIMAL(8.2),YES,-,"850.00;200.00",W,-,-
+t_board,admin_status,Admin Status,管理状态,VARCHAR(16),NO,UP,"UP;DOWN;OFFLINE",枚举,-,-
+t_board,oper_status,Oper Status,运行状态,VARCHAR(16),NO,UP,"UP;DOWN;FAULT",枚举,-,-
+t_board,install_date,Install Date,板卡安装日期,DATE,YES,-,"2024-03-15",日期,-,-
+t_board,last_reboot_time,Last Reboot Time,最近重启时间,TIMESTAMP,YES,-,"2025-01-10 03:00:00",时间戳,-,-
+t_board,uptime_hours,Uptime (hours),累计运行时长,BIGINT,YES,0,"8760;2160",小时,-,-
+t_board,description,Description,备注,VARCHAR(512),YES,-,"主用主控板",文本,-,-
+t_board,created_at,Created At,创建时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:00:00",时间戳,-,-
+t_board,updated_at,Updated At,更新时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:10:00",时间戳,-,-
+t_interface,if_id,Interface ID,接口唯一标识,VARCHAR(64),NO,-,"IF-001",PK,-,-
+t_interface,ne_id,NE ID,所属网元ID,VARCHAR(64),NO,-,"NE-BJ-PE01",FK,t_network_element.ne_id,-
+t_interface,board_id,Board ID,所属单板ID（物理口有值逻辑口可空）,VARCHAR(64),YES,-,"BRD-001",FK,t_board.board_id,-
+t_interface,if_name,Interface Name,"接口名称（设备标准命名），对应YANG interface name和SNMP ifName",VARCHAR(128),NO,-,"GE1/0/1;100GE3/0/0;Eth-Trunk10;LoopBack0",文本,-,"RFC 8343;IF-MIB ifName"
+t_interface,if_index,ifIndex,"SNMP接口索引号，每接口唯一正整数，重启后应保持稳定",BIGINT,YES,-,"1001;2001",正整数,-,RFC 2863 IF-MIB
+t_interface,if_type,Interface Type,"接口逻辑类型：PHYSICAL(物理口)、LOOPBACK、VLANIF、ETH-TRUNK(聚合口)、TUNNEL、NULL",VARCHAR(32),NO,-,"PHYSICAL;ETH-TRUNK;LOOPBACK;VLANIF;TUNNEL",枚举,-,-
+t_interface,phy_type,Physical Type,物理端口速率类型（仅物理口有值）,VARCHAR(32),YES,-,"GE;10GE;25GE;100GE;400GE",枚举,-,-
+t_interface,speed_mbps,Speed (Mbps),接口协商速率,BIGINT,YES,-,"1000;10000;100000;400000",Mbps,-,-
+t_interface,mtu,MTU,最大传输单元,INT,YES,1500,"1500;9000;9216",bytes,-,RFC 791
+t_interface,ipv4_address,IPv4 Address,接口IPv4地址,VARCHAR(32),YES,-,"192.168.1.1;10.0.0.1",IPv4,-,-
+t_interface,ipv4_mask,IPv4 Mask,IPv4子网掩码,VARCHAR(32),YES,-,"255.255.255.252;255.255.255.0",掩码,-,-
+t_interface,ipv6_address,IPv6 Address,接口IPv6地址,VARCHAR(64),YES,-,"2001:DB8:10::1",IPv6,-,-
+t_interface,ipv6_prefix_len,IPv6 Prefix Length,IPv6前缀长度,INT,YES,-,"64;126",0-128,-,-
+t_interface,mac_address,MAC Address,接口MAC地址,VARCHAR(32),YES,-,"00:11:22:33:44:01",MAC,-,-
+t_interface,vlan_id,VLAN ID,接口关联的VLAN标识,INT,YES,-,"100;200",1-4094,-,IEEE 802.1Q
+t_interface,vrf_name,VRF Name,接口绑定的VPN路由转发实例名称,VARCHAR(64),YES,-,"vpn_acme;vpn_bank",文本,-,RFC 4364
+t_interface,trunk_id,Trunk ID,所属Eth-Trunk聚合组ID（仅成员口有值）,VARCHAR(64),YES,-,"IF-TRUNK-10",FK引用同表,-,IEEE 802.3ad
+t_interface,trunk_member_count,Trunk Member Count,Trunk聚合组成员口数量（仅Trunk主口有值）,INT,YES,-,"4;8",≥0,-,-
+t_interface,isis_enabled,IS-IS Enabled,该接口是否使能IS-IS路由协议,BOOLEAN,YES,FALSE,"TRUE;FALSE",布尔,-,-
+t_interface,isis_cost,IS-IS Cost,"IS-IS接口开销值，值越小路径优先级越高",INT,YES,-,"10;100",正整数,-,ISO 10589
+t_interface,ospf_enabled,OSPF Enabled,该接口是否使能OSPF路由协议,BOOLEAN,YES,FALSE,"TRUE;FALSE",布尔,-,-
+t_interface,bfd_enabled,BFD Enabled,是否使能BFD(双向转发检测)用于快速链路故障检测,BOOLEAN,YES,FALSE,"TRUE;FALSE",布尔,-,RFC 5880
+t_interface,qos_profile,QoS Profile,接口应用的QoS策略模板名称,VARCHAR(64),YES,-,"GOLD-INGRESS;SILVER-EGRESS",文本,-,-
+t_interface,admin_status,Admin Status,接口管理状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,IF-MIB ifAdminStatus
+t_interface,oper_status,Oper Status,接口运行状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,IF-MIB ifOperStatus
+t_interface,last_change_time,Last Change Time,接口最近一次状态变更时间,TIMESTAMP,YES,-,"2025-03-28 14:30:00",时间戳,-,IF-MIB ifLastChange
+t_interface,description,Description,"接口描述，通常标注对端信息",VARCHAR(512),YES,-,"TO:SH-PE01-100GE3/0/0;CUST:AcmeBank-CE01",文本,-,-
+t_interface,created_at,Created At,创建时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:00:00",时间戳,-,-
+t_interface,updated_at,Updated At,更新时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:10:00",时间戳,-,-
+t_physical_link,link_id,Link ID,链路唯一标识,VARCHAR(64),NO,-,"LINK-001",PK,-,-
+t_physical_link,link_name,Link Name,链路命名,VARCHAR(128),YES,-,"BJ-PE01<->SH-PE01",文本,-,-
+t_physical_link,link_type,Link Type,链路介质类型,VARCHAR(32),NO,-,"FIBER;COPPER;MICROWAVE",枚举,-,-
+t_physical_link,a_ne_id,A-End NE ID,A端网元ID,VARCHAR(64),NO,-,"NE-BJ-PE01",FK,t_network_element.ne_id,-
+t_physical_link,a_if_id,A-End Interface ID,A端接口ID,VARCHAR(64),NO,-,"IF-001",FK,t_interface.if_id,-
+t_physical_link,a_site_id,A-End Site ID,A端站点ID,VARCHAR(64),YES,-,"SITE-BJ-001",FK,t_site.site_id,-
+t_physical_link,z_ne_id,Z-End NE ID,Z端网元ID,VARCHAR(64),NO,-,"NE-SH-PE01",FK,t_network_element.ne_id,-
+t_physical_link,z_if_id,Z-End Interface ID,Z端接口ID,VARCHAR(64),NO,-,"IF-051",FK,t_interface.if_id,-
+t_physical_link,z_site_id,Z-End Site ID,Z端站点ID,VARCHAR(64),YES,-,"SITE-SH-001",FK,t_site.site_id,-
+t_physical_link,bandwidth_mbps,Bandwidth (Mbps),链路带宽容量,BIGINT,NO,-,"100000;10000",Mbps,-,-
+t_physical_link,distance_km,Distance (km),链路物理距离,DECIMAL(10.2),YES,-,"1200.50;0.50",km,-,-
+t_physical_link,latency_ms,Inherent Latency (ms),"链路固有传播时延（光纤约5μs/km）",DECIMAL(8.3),YES,-,"6.000;0.003",ms,-,-
+t_physical_link,fiber_core_count,Fiber Core Count,光纤芯数,INT,YES,-,"48;12",正整数,-,-
+t_physical_link,wavelength_nm,Wavelength (nm),使用波长,INT,YES,-,"1310;1550",nm,-,ITU-T G.694
+t_physical_link,cable_id,Cable ID,光缆/电缆编号,VARCHAR(64),YES,-,"CAB-BJ-SH-001",文本,-,-
+t_physical_link,is_intra_site,Is Intra-Site,是否站内短距链路,BOOLEAN,YES,FALSE,"FALSE;TRUE",布尔,-,-
+t_physical_link,protection_type,Protection Type,链路保护方式,VARCHAR(32),YES,-,"NONE;1+1;1:1;RING",枚举,-,ITU-T G.841
+t_physical_link,carrier,Carrier,承载运营商（租用电路场景）,VARCHAR(64),YES,-,"中国电信;中国联通",文本,-,-
+t_physical_link,circuit_id,Circuit ID,电路编号（运营商侧）,VARCHAR(64),YES,-,"CIR-20240001",文本,-,-
+t_physical_link,sla_class,SLA Class,链路SLA等级,VARCHAR(16),YES,-,"GOLD;SILVER;BRONZE",枚举,-,-
+t_physical_link,admin_status,Admin Status,管理状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,-
+t_physical_link,oper_status,Oper Status,运行状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,-
+t_physical_link,commissioning_date,Commissioning Date,链路开通日期,DATE,YES,-,"2024-01-15",日期,-,-
+t_physical_link,contract_expire_date,Contract Expire Date,合同到期日,DATE,YES,-,"2027-01-15",日期,-,-
+t_physical_link,monthly_cost,Monthly Cost (CNY),月租费用（租用链路）,DECIMAL(12.2),YES,-,"50000.00;0.00",CNY,-,-
+t_physical_link,description,Description,备注,VARCHAR(512),YES,-,"骨干核心链路",文本,-,-
+t_physical_link,created_at,Created At,创建时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:00:00",时间戳,-,-
+t_physical_link,updated_at,Updated At,更新时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:10:00",时间戳,-,-
+t_vrf_instance,vrf_id,VRF ID,VRF实例唯一标识,VARCHAR(64),NO,-,"VRF-001",PK,-,-
+t_vrf_instance,ne_id,NE ID,所属网元ID（VRF配置在PE上）,VARCHAR(64),NO,-,"NE-BJ-PE01",FK,t_network_element.ne_id,-
+t_vrf_instance,vrf_name,VRF Name,VRF实例名称（对应设备上VPN-Instance名称）,VARCHAR(64),NO,-,"vpn_acme;vpn_bank",文本,-,-
+t_vrf_instance,route_distinguisher,Route Distinguisher (RD),"8字节路由标识符，用于区分不同VPN中重叠的IP地址空间，格式ASN:nn或IP:nn",VARCHAR(32),YES,-,"65000:100;1.1.1.1:10",RD格式,-,RFC 4364
+t_vrf_instance,vpn_target_import,RT Import,"导入路由目标列表，决定哪些远端PE的路由被导入本VRF",VARCHAR(256),YES,-,"65000:100;65000:100,65000:200",逗号分隔RT,-,RFC 4364
+t_vrf_instance,vpn_target_export,RT Export,"导出路由目标列表，标记本VRF路由应被哪些远端VRF接收",VARCHAR(256),YES,-,"65000:100",逗号分隔RT,-,RFC 4364
+t_vrf_instance,address_family,Address Family,地址族,VARCHAR(16),NO,IPV4,"IPV4;IPV6;DUAL",枚举,-,-
+t_vrf_instance,label_mode,Label Mode,MPLS标签分配模式,VARCHAR(16),YES,-,"PER_INSTANCE;PER_ROUTE",枚举,-,RFC 4364
+t_vrf_instance,tunnel_policy,Tunnel Policy,"隧道策略名称，决定VPN流量选择哪种隧道承载",VARCHAR(64),YES,-,"TP-SRV6-TE;TP-LDP",文本,-,华为Tunnel Policy
+t_vrf_instance,srv6_locator,SRv6 Locator,VPN实例绑定的SRv6 Locator,VARCHAR(64),YES,-,"2001:DB8:100::/48",IPv6前缀,-,RFC 8986
+t_vrf_instance,srv6_sid_end_dt4,End.DT4 SID,"SRv6 End.DT4 SID，收到SRv6报文后解封装查IPv4 VRF路由表转发",VARCHAR(64),YES,-,"2001:DB8:100::11",IPv6 SID,-,RFC 8986
+t_vrf_instance,srv6_sid_end_dt6,End.DT6 SID,"SRv6 End.DT6 SID，类似End.DT4但用于IPv6 VRF",VARCHAR(64),YES,-,"2001:DB8:100::12",IPv6 SID,-,RFC 8986
+t_vrf_instance,evpn_type,EVPN Type,EVPN业务类型,VARCHAR(16),YES,-,"NONE;L2;L3;VPWS",枚举,-,RFC 7432
+t_vrf_instance,max_routes,Max Routes,VRF允许的最大路由条数上限,INT,YES,-,"10000;5000",正整数,-,-
+t_vrf_instance,current_route_count,Current Route Count,当前实际路由条数,INT,YES,0,"3500;120",≥0,-,-
+t_vrf_instance,associated_if_count,Associated Interface Count,关联到该VRF的接口数量,INT,YES,0,"5;2",≥0,-,-
+t_vrf_instance,customer_id,Customer ID,客户编号,VARCHAR(64),YES,-,"CUST-001",文本,-,-
+t_vrf_instance,customer_name,Customer Name,客户名称,VARCHAR(128),YES,-,"Acme银行;MediaCorp",文本,-,-
+t_vrf_instance,service_type,Service Type,业务类型,VARCHAR(32),YES,-,"MPLS_VPN;CLOUD_CONNECT;INTERNET",枚举,-,-
+t_vrf_instance,admin_status,Admin Status,管理状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,-
+t_vrf_instance,oper_status,Oper Status,运行状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,-
+t_vrf_instance,description,Description,备注,VARCHAR(512),YES,-,"Acme银行总部接入VRF",文本,-,-
+t_vrf_instance,created_at,Created At,创建时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:00:00",时间戳,-,-
+t_vrf_instance,updated_at,Updated At,更新时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:10:00",时间戳,-,-
+t_l3vpn_service,vpn_id,VPN ID,VPN业务唯一标识,VARCHAR(64),NO,-,"VPN-001",PK,-,-
+t_l3vpn_service,vpn_name,VPN Name,VPN业务名称,VARCHAR(128),NO,-,"ACME-BANK-VPN;MEDIA-CORP-VPN",文本,-,-
+t_l3vpn_service,vpn_type,VPN Type,VPN业务类型,VARCHAR(32),NO,-,"L3VPN;EVPN_L3;EVPN_VPWS",枚举,-,"RFC 4364;RFC 7432"
+t_l3vpn_service,topology,Topology,VPN拓扑模型,VARCHAR(16),NO,ANY_TO_ANY,"ANY_TO_ANY;HUB_SPOKE;P2P",枚举,-,-
+t_l3vpn_service,customer_id,Customer ID,客户编号,VARCHAR(64),NO,-,"CUST-001",文本,-,-
+t_l3vpn_service,customer_name,Customer Name,客户名称,VARCHAR(128),NO,-,"Acme银行;MediaCorp",文本,-,-
+t_l3vpn_service,service_level,Service Level,"服务等级，决定SLA保证水平和QoS优先级",VARCHAR(16),NO,SILVER,"PLATINUM;GOLD;SILVER;BRONZE",枚举,-,-
+t_l3vpn_service,bandwidth_mbps,Guaranteed Bandwidth (Mbps),SLA保证带宽,BIGINT,YES,-,"1000;100",Mbps,-,-
+t_l3vpn_service,max_latency_ms,Max Latency SLA (ms),SLA承诺最大端到端时延,DECIMAL(8.3),YES,-,"20.000;50.000",ms,-,-
+t_l3vpn_service,max_jitter_ms,Max Jitter SLA (ms),SLA承诺最大抖动,DECIMAL(8.3),YES,-,"5.000;10.000",ms,-,-
+t_l3vpn_service,max_packet_loss_pct,Max Packet Loss SLA (%),SLA承诺最大丢包率,DECIMAL(5.4),YES,-,"0.0100;0.1000",%,-,-
+t_l3vpn_service,pe_count,PE Count,关联的PE设备数量,INT,YES,0,"5;2",≥0,-,-
+t_l3vpn_service,site_count,Site Count,覆盖的客户站点数量,INT,YES,0,"10;3",≥0,-,-
+t_l3vpn_service,underlay_type,Underlay Type,"承载隧道类型，决定VPN流量使用哪种底层传输技术",VARCHAR(32),NO,SRV6_BE,"SRV6_BE;SRV6_TE;MPLS_LDP;MPLS_TE",枚举,-,华为NCE-IP
+t_l3vpn_service,encryption_enabled,Encryption Enabled,是否启用IPSec加密,BOOLEAN,YES,FALSE,"TRUE;FALSE",布尔,-,-
+t_l3vpn_service,multicast_enabled,Multicast Enabled,是否启用组播,BOOLEAN,YES,FALSE,"TRUE;FALSE",布尔,-,-
+t_l3vpn_service,route_distinguisher,Route Distinguisher,全局RD,VARCHAR(32),YES,-,"65000:100",RD格式,-,RFC 4364
+t_l3vpn_service,vpn_target,VPN Target (RT),RT配置,VARCHAR(256),YES,-,"65000:100",RT,-,RFC 4364
+t_l3vpn_service,contract_start_date,Contract Start,合同起始日期,DATE,YES,-,"2024-01-01",日期,-,-
+t_l3vpn_service,contract_end_date,Contract End,合同结束日期,DATE,YES,-,"2027-01-01",日期,-,-
+t_l3vpn_service,monthly_fee,Monthly Fee (CNY),月租费,DECIMAL(12.2),YES,-,"150000.00;20000.00",CNY,-,-
+t_l3vpn_service,admin_status,Admin Status,业务管理状态,VARCHAR(16),NO,ACTIVE,"ACTIVE;SUSPENDED;TERMINATED",枚举,-,-
+t_l3vpn_service,oper_status,Oper Status,业务运行状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,-
+t_l3vpn_service,deploy_status,Deploy Status,部署状态,VARCHAR(16),NO,DEPLOYED,"DEPLOYED;DEPLOYING;PLANNED;FAILED",枚举,-,-
+t_l3vpn_service,last_audit_time,Last Audit Time,最近配置审计时间,TIMESTAMP,YES,-,"2025-03-01 10:00:00",时间戳,-,-
+t_l3vpn_service,description,Description,备注,VARCHAR(512),YES,-,"金融专线VPN",文本,-,-
+t_l3vpn_service,created_at,Created At,创建时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:00:00",时间戳,-,-
+t_l3vpn_service,updated_at,Updated At,更新时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:10:00",时间戳,-,-
+t_vpn_pe_binding,binding_id,Binding ID,绑定记录唯一标识,VARCHAR(64),NO,-,"BIND-001",PK,-,-
+t_vpn_pe_binding,vpn_id,VPN ID,VPN业务ID,VARCHAR(64),NO,-,"VPN-001",FK,t_l3vpn_service.vpn_id,-
+t_vpn_pe_binding,ne_id,NE ID,PE网元ID,VARCHAR(64),NO,-,"NE-BJ-PE01",FK,t_network_element.ne_id,-
+t_vpn_pe_binding,vrf_id,VRF ID,该PE上对应的VRF实例ID,VARCHAR(64),NO,-,"VRF-001",FK,t_vrf_instance.vrf_id,-
+t_vpn_pe_binding,if_id,Interface ID,PE侧接入接口ID（连接CE的接口）,VARCHAR(64),NO,-,"IF-010",FK,t_interface.if_id,-
+t_vpn_pe_binding,pe_role,PE Role,该PE在VPN中的角色（Hub-Spoke拓扑下区分）,VARCHAR(16),NO,SPOKE,"HUB;SPOKE",枚举,-,-
+t_vpn_pe_binding,ce_ipv4,CE IPv4,CE侧接口IPv4地址,VARCHAR(32),YES,-,"192.168.1.2",IPv4,-,-
+t_vpn_pe_binding,pe_ipv4,PE IPv4,PE侧接口IPv4地址,VARCHAR(32),YES,-,"192.168.1.1",IPv4,-,-
+t_vpn_pe_binding,ce_ipv6,CE IPv6,CE侧接口IPv6,VARCHAR(64),YES,-,"2001:DB8:C::2",IPv6,-,-
+t_vpn_pe_binding,pe_ipv6,PE IPv6,PE侧接口IPv6,VARCHAR(64),YES,-,"2001:DB8:C::1",IPv6,-,-
+t_vpn_pe_binding,ce_as_number,CE AS Number,CE侧BGP AS号（EBGP接入场景）,BIGINT,YES,-,"65100;65200",正整数,-,-
+t_vpn_pe_binding,routing_protocol,Routing Protocol,PE-CE之间使用的路由协议,VARCHAR(16),NO,STATIC,"STATIC;EBGP;OSPF",枚举,-,RFC 4364
+t_vpn_pe_binding,access_bandwidth_mbps,Access Bandwidth (Mbps),接入带宽,BIGINT,YES,-,"1000;100",Mbps,-,-
+t_vpn_pe_binding,vlan_id,VLAN ID,接入VLAN,INT,YES,-,"100;200",1-4094,-,IEEE 802.1Q
+t_vpn_pe_binding,encapsulation,Encapsulation,封装类型,VARCHAR(32),YES,DOT1Q,"DOT1Q;UNTAG;QINQ",枚举,-,"IEEE 802.1Q;802.1ad"
+t_vpn_pe_binding,site_name,Site Name,接入站点名称（业务视角）,VARCHAR(128),YES,-,"Acme银行北京总部",文本,-,-
+t_vpn_pe_binding,admin_status,Admin Status,管理状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,-
+t_vpn_pe_binding,oper_status,Oper Status,运行状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,-
+t_vpn_pe_binding,description,Description,备注,VARCHAR(512),YES,-,"总部主接入",文本,-,-
+t_vpn_pe_binding,created_at,Created At,创建时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:00:00",时间戳,-,-
+t_vpn_pe_binding,updated_at,Updated At,更新时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:10:00",时间戳,-,-
+t_srv6_policy,policy_id,Policy ID,SRv6 Policy唯一标识,VARCHAR(64),NO,-,"POL-001",PK,-,-
+t_srv6_policy,policy_name,Policy Name,Policy名称,VARCHAR(128),NO,-,"SRv6-TE-BJ-SH-LOW-LATENCY",文本,-,-
+t_srv6_policy,source_ne_id,Source NE ID,源端网元(头节点)ID,VARCHAR(64),NO,-,"NE-BJ-PE01",FK,t_network_element.ne_id,-
+t_srv6_policy,endpoint_ipv6,Endpoint IPv6,"Policy的Endpoint地址，标识尾节点。SR Policy由<headend,color,endpoint>三元组标识",VARCHAR(64),NO,-,"2001:DB8:200::1",IPv6,-,RFC 9256
+t_srv6_policy,dest_ne_id,Destination NE ID,目的网元ID,VARCHAR(64),YES,-,"NE-SH-PE01",FK,t_network_element.ne_id,-
+t_srv6_policy,color,Color,"Color值标识SLA意图（不同Color对应不同SLA需求）",BIGINT,NO,-,"10;20;100",正整数,-,RFC 9256
+t_srv6_policy,distinguisher,Distinguisher,区分相同Color+Endpoint的不同Policy,BIGINT,YES,0,"0;1",正整数,-,RFC 9256
+t_srv6_policy,binding_sid,Binding SID,"绑定SID(BSID)，用于SRH压缩，一个BSID代表一段完整SRv6路径",VARCHAR(64),YES,-,"2001:DB8:100::FF",IPv6 SID,-,RFC 8402
+t_srv6_policy,preference,Preference,"候选路径优先级，值越大越优先",INT,YES,100,"100;200",正整数,-,RFC 9256
+t_srv6_policy,segment_list_count,Segment List Count,Segment List数量,INT,YES,1,"1;2",≥1,-,-
+t_srv6_policy,segment_list,Segment List,"SID序列(JSON)，定义转发路径。列表中SID顺序即转发顺序",TEXT,YES,-,"[""2001:DB8:100::1"",""2001:DB8:200::1""]",JSON数组,-,RFC 8986
+t_srv6_policy,explicit_path,Explicit Path,是否显式指定路径,BOOLEAN,YES,FALSE,"TRUE;FALSE",布尔,-,-
+t_srv6_policy,provision_type,Provision Type,部署方式,VARCHAR(16),NO,DYNAMIC,"STATIC;DYNAMIC;CONTROLLER",枚举,-,华为NCE-IP
+t_srv6_policy,sla_type,SLA Type,SLA优化目标,VARCHAR(32),YES,-,"LOW_LATENCY;LOW_JITTER;HIGH_BW",枚举,-,-
+t_srv6_policy,max_latency_ms,Max Latency Constraint (ms),路径最大时延约束,DECIMAL(8.3),YES,-,"20.000",ms,-,-
+t_srv6_policy,max_jitter_ms,Max Jitter Constraint (ms),路径最大抖动约束,DECIMAL(8.3),YES,-,"5.000",ms,-,-
+t_srv6_policy,min_bandwidth_mbps,Min Bandwidth Constraint (Mbps),路径最小带宽约束,BIGINT,YES,-,"10000",Mbps,-,-
+t_srv6_policy,hop_count,Hop Count,路径跳数,INT,YES,-,"3;5",正整数,-,-
+t_srv6_policy,associated_vpn_count,Associated VPN Count,该Policy承载的VPN业务数量,INT,YES,0,"3;0",≥0,-,-
+t_srv6_policy,ecmp_count,ECMP Count,等价多路径数量,INT,YES,1,"1;2",≥1,-,-
+t_srv6_policy,admin_status,Admin Status,管理状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,-
+t_srv6_policy,oper_status,Oper Status,运行状态,VARCHAR(16),NO,UP,"UP;DOWN;PARTIAL",枚举,-,-
+t_srv6_policy,deploy_source,Deploy Source,部署来源,VARCHAR(32),YES,-,"NCE;CLI;PCEP",枚举,-,-
+t_srv6_policy,last_path_change,Last Path Change,最近路径变更时间,TIMESTAMP,YES,-,"2025-03-28 10:00:00",时间戳,-,-
+t_srv6_policy,description,Description,备注,VARCHAR(512),YES,-,"北京到上海低时延路径",文本,-,-
+t_srv6_policy,created_at,Created At,创建时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:00:00",时间戳,-,-
+t_srv6_policy,updated_at,Updated At,更新时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:10:00",时间戳,-,-
+t_tunnel,tunnel_id,Tunnel ID,隧道唯一标识,VARCHAR(64),NO,-,"TUN-001",PK,-,-
+t_tunnel,tunnel_name,Tunnel Name,隧道名称,VARCHAR(128),NO,-,"SRv6-TE-BJ-SH-001",文本,-,-
+t_tunnel,tunnel_type,Tunnel Type,隧道类型,VARCHAR(32),NO,-,"SRV6_BE;SRV6_TE;MPLS_LDP;MPLS_TE;GRE",枚举,-,-
+t_tunnel,source_ne_id,Source NE ID,源端网元ID,VARCHAR(64),NO,-,"NE-BJ-PE01",FK,t_network_element.ne_id,-
+t_tunnel,source_ip,Source IP,源端IP/IPv6,VARCHAR(64),YES,-,"2001:DB8::1",IP,-,-
+t_tunnel,dest_ne_id,Destination NE ID,宿端网元ID,VARCHAR(64),NO,-,"NE-SH-PE01",FK,t_network_element.ne_id,-
+t_tunnel,dest_ip,Destination IP,宿端IP/IPv6,VARCHAR(64),YES,-,"2001:DB8::2",IP,-,-
+t_tunnel,policy_id,Policy ID,关联SRv6 Policy ID（SRv6 TE隧道）,VARCHAR(64),YES,-,"POL-001",FK,t_srv6_policy.policy_id,-
+t_tunnel,tunnel_if_id,Tunnel Interface ID,关联的Tunnel逻辑接口ID,VARCHAR(64),YES,-,"IF-TUN-001",文本,-,-
+t_tunnel,bandwidth_mbps,Bandwidth (Mbps),隧道配置带宽,BIGINT,YES,-,"10000",Mbps,-,-
+t_tunnel,measured_latency_ms,Measured Latency (ms),实测时延（iFIT/TWAMP检测值）,DECIMAL(8.3),YES,-,"12.500",ms,-,华为iFIT
+t_tunnel,measured_jitter_ms,Measured Jitter (ms),实测抖动,DECIMAL(8.3),YES,-,"1.200",ms,-,-
+t_tunnel,path_hop_count,Path Hop Count,路径跳数,INT,YES,-,"3;5",正整数,-,-
+t_tunnel,protection_type,Protection Type,保护类型,VARCHAR(32),YES,NONE,"NONE;HOT_STANDBY;TI_LFA;FRR",枚举,-,"RFC 7490;RFC 4090"
+t_tunnel,is_bidirectional,Is Bidirectional,是否双向隧道,BOOLEAN,YES,TRUE,"TRUE;FALSE",布尔,-,-
+t_tunnel,associated_vpn_ids,Associated VPN IDs,承载的VPN ID列表（JSON）,TEXT,YES,-,"[""VPN-001"",""VPN-002""]",JSON数组,-,-
+t_tunnel,tunnel_group_id,Tunnel Group ID,隧道组ID（Policy Group场景）,VARCHAR(64),YES,-,"TG-001",文本,-,华为SRv6 Policy Group
+t_tunnel,group_type,Group Type,隧道组类型,VARCHAR(32),YES,-,"ANY_TO_ANY;HUB_SPOKE",枚举,-,-
+t_tunnel,signaling_protocol,Signaling Protocol,信令协议,VARCHAR(32),YES,-,"BGP_SR_POLICY;PCEP;RSVP_TE;STATIC",枚举,-,-
+t_tunnel,admin_status,Admin Status,管理状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,-
+t_tunnel,oper_status,Oper Status,运行状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,-
+t_tunnel,setup_priority,Setup Priority,建立优先级(0最高7最低),INT,YES,7,"7;0",0-7,-,RFC 3209
+t_tunnel,hold_priority,Hold Priority,维持优先级,INT,YES,7,"7;0",0-7,-,RFC 3209
+t_tunnel,description,Description,备注,VARCHAR(512),YES,-,"低时延TE隧道",文本,-,-
+t_tunnel,created_at,Created At,创建时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:00:00",时间戳,-,-
+t_tunnel,updated_at,Updated At,更新时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 00:10:00",时间戳,-,-
+t_ne_perf_kpi,kpi_id,KPI ID,记录ID（自增主键）,BIGSERIAL,NO,-,"1;2",PK,-,-
+t_ne_perf_kpi,ne_id,NE ID,网元ID,VARCHAR(64),NO,-,"NE-BJ-PE01",FK,t_network_element.ne_id,-
+t_ne_perf_kpi,collect_time,Collection Time,采集时间点,TIMESTAMP,NO,-,"2025-03-29 08:00:00",时间戳,-,-
+t_ne_perf_kpi,granularity_min,Granularity (min),采集粒度,INT,NO,15,"15;5;60",分钟,-,-
+t_ne_perf_kpi,cpu_usage_avg_pct,CPU Usage Avg (%),CPU平均利用率,DECIMAL(5.2),YES,-,"45.20;92.50",% 0-100,-,HOST-RESOURCES-MIB
+t_ne_perf_kpi,cpu_usage_max_pct,CPU Usage Max (%),CPU峰值利用率,DECIMAL(5.2),YES,-,"78.00;99.00",% 0-100,-,-
+t_ne_perf_kpi,memory_usage_avg_pct,Memory Usage Avg (%),内存平均利用率,DECIMAL(5.2),YES,-,"60.30",% 0-100,-,-
+t_ne_perf_kpi,memory_usage_max_pct,Memory Usage Max (%),内存峰值利用率,DECIMAL(5.2),YES,-,"72.00",% 0-100,-,-
+t_ne_perf_kpi,temperature_avg_c,Temperature Avg (°C),设备平均温度,DECIMAL(5.2),YES,-,"42.50",°C,-,-
+t_ne_perf_kpi,temperature_max_c,Temperature Max (°C),设备最高温度,DECIMAL(5.2),YES,-,"55.00",°C,-,-
+t_ne_perf_kpi,power_consumption_w,Power Consumption (W),实际功耗,DECIMAL(8.2),YES,-,"1250.00",W,-,-
+t_ne_perf_kpi,fan_speed_rpm,Fan Speed (RPM),风扇转速,INT,YES,-,"6500;8000",RPM,-,-
+t_ne_perf_kpi,uptime_seconds,Uptime (seconds),运行时长,BIGINT,YES,-,"31536000",秒,-,sysUpTime
+t_ne_perf_kpi,fib_usage_count,FIB Usage Count,FIB(转发信息表)已用条目数,INT,YES,-,"250000",正整数,-,-
+t_ne_perf_kpi,fib_capacity,FIB Capacity,FIB表总容量,INT,YES,-,"2000000",正整数,-,-
+t_ne_perf_kpi,arp_entry_count,ARP Entry Count,ARP表项数,INT,YES,-,"5000",正整数,-,-
+t_ne_perf_kpi,route_count_ipv4,IPv4 Route Count,IPv4路由表条目数,INT,YES,-,"750000",正整数,-,-
+t_ne_perf_kpi,route_count_ipv6,IPv6 Route Count,IPv6路由表条目数,INT,YES,-,"120000",正整数,-,-
+t_ne_perf_kpi,bgp_peer_up_count,BGP Peer Up Count,BGP邻居Established状态数量,INT,YES,-,"25;23",正整数,-,-
+t_ne_perf_kpi,bgp_peer_total_count,BGP Peer Total Count,BGP邻居配置总数,INT,YES,-,"25",正整数,-,-
+t_ne_perf_kpi,isis_adj_up_count,IS-IS Adjacency Up Count,IS-IS邻接关系UP数量,INT,YES,-,"4;3",正整数,-,-
+t_ne_perf_kpi,alarm_critical_count,Critical Alarm Count,当前紧急告警数,INT,YES,0,"0;2",≥0,-,-
+t_ne_perf_kpi,alarm_major_count,Major Alarm Count,当前重要告警数,INT,YES,0,"1;0",≥0,-,-
+t_ne_perf_kpi,alarm_minor_count,Minor Alarm Count,当前次要告警数,INT,YES,0,"3;0",≥0,-,-
+t_ne_perf_kpi,created_at,Created At,写入时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 08:01:00",时间戳,-,-
+t_interface_perf_kpi,kpi_id,KPI ID,记录ID（自增主键）,BIGSERIAL,NO,-,"1;2",PK,-,-
+t_interface_perf_kpi,if_id,Interface ID,接口ID,VARCHAR(64),NO,-,"IF-001",FK,t_interface.if_id,-
+t_interface_perf_kpi,ne_id,NE ID,网元ID,VARCHAR(64),NO,-,"NE-BJ-PE01",FK,t_network_element.ne_id,-
+t_interface_perf_kpi,collect_time,Collection Time,采集时间,TIMESTAMP,NO,-,"2025-03-29 08:00:00",时间戳,-,-
+t_interface_perf_kpi,granularity_min,Granularity (min),采集粒度,INT,NO,15,"15",分钟,-,-
+t_interface_perf_kpi,in_octets,In Octets,入方向字节数（采集周期内增量）,BIGINT,YES,0,"9000000000",bytes,-,IF-MIB ifHCInOctets
+t_interface_perf_kpi,out_octets,Out Octets,出方向字节数,BIGINT,YES,0,"12000000000",bytes,-,IF-MIB ifHCOutOctets
+t_interface_perf_kpi,in_packets,In Packets,入方向总包数,BIGINT,YES,0,"6000000",packets,-,-
+t_interface_perf_kpi,out_packets,Out Packets,出方向总包数,BIGINT,YES,0,"8000000",packets,-,-
+t_interface_perf_kpi,in_unicast_packets,In Unicast Packets,入方向单播包数,BIGINT,YES,0,"5800000",packets,-,IF-MIB ifHCInUcastPkts
+t_interface_perf_kpi,out_unicast_packets,Out Unicast Packets,出方向单播包数,BIGINT,YES,0,"7700000",packets,-,IF-MIB ifHCOutUcastPkts
+t_interface_perf_kpi,in_multicast_packets,In Multicast Packets,入方向组播包数,BIGINT,YES,0,"100000",packets,-,-
+t_interface_perf_kpi,out_multicast_packets,Out Multicast Packets,出方向组播包数,BIGINT,YES,0,"150000",packets,-,-
+t_interface_perf_kpi,in_broadcast_packets,In Broadcast Packets,入方向广播包数,BIGINT,YES,0,"50000",packets,-,-
+t_interface_perf_kpi,out_broadcast_packets,Out Broadcast Packets,出方向广播包数,BIGINT,YES,0,"60000",packets,-,-
+t_interface_perf_kpi,in_bandwidth_usage_pct,In Bandwidth Usage (%),"入方向带宽利用率 = in_octets×8/(speed_mbps×1e6×采集秒)×100",DECIMAL(5.2),YES,0,"45.20;92.50",% 0-100,-,-
+t_interface_perf_kpi,out_bandwidth_usage_pct,Out Bandwidth Usage (%),出方向带宽利用率,DECIMAL(5.2),YES,0,"60.80",% 0-100,-,-
+t_interface_perf_kpi,in_peak_rate_mbps,In Peak Rate (Mbps),入方向峰值速率,DECIMAL(12.2),YES,-,"85000.00",Mbps,-,-
+t_interface_perf_kpi,out_peak_rate_mbps,Out Peak Rate (Mbps),出方向峰值速率,DECIMAL(12.2),YES,-,"92000.00",Mbps,-,-
+t_interface_perf_kpi,in_error_packets,In Error Packets,入方向错误包数（CRC/帧错误等）,BIGINT,YES,0,"0;150",count,-,IF-MIB ifInErrors
+t_interface_perf_kpi,out_error_packets,Out Error Packets,出方向错误包数,BIGINT,YES,0,"0;10",count,-,IF-MIB ifOutErrors
+t_interface_perf_kpi,in_discard_packets,In Discard Packets,入方向丢弃包数（队列溢出等）,BIGINT,YES,0,"0;5000",count,-,IF-MIB ifInDiscards
+t_interface_perf_kpi,out_discard_packets,Out Discard Packets,出方向丢弃包数,BIGINT,YES,0,"0;3000",count,-,IF-MIB ifOutDiscards
+t_interface_perf_kpi,crc_error_count,CRC Error Count,CRC校验错误数,BIGINT,YES,0,"0;100",count,-,-
+t_interface_perf_kpi,collision_count,Collision Count,碰撞数,BIGINT,YES,0,"0",count,-,-
+t_interface_perf_kpi,oper_status,Oper Status,采集时刻接口运行状态快照,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,-
+t_interface_perf_kpi,status_change_count,Status Change Count,状态翻转次数,INT,YES,0,"0;3",≥0,-,-
+t_interface_perf_kpi,created_at,Created At,写入时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 08:01:00",时间戳,-,-
+t_tunnel_perf_kpi,kpi_id,KPI ID,记录ID（自增主键）,BIGSERIAL,NO,-,"1;2",PK,-,-
+t_tunnel_perf_kpi,tunnel_id,Tunnel ID,隧道ID,VARCHAR(64),NO,-,"TUN-001",FK,t_tunnel.tunnel_id,-
+t_tunnel_perf_kpi,source_ne_id,Source NE ID,源网元ID,VARCHAR(64),NO,-,"NE-BJ-PE01",FK,t_network_element.ne_id,-
+t_tunnel_perf_kpi,dest_ne_id,Destination NE ID,宿网元ID,VARCHAR(64),NO,-,"NE-SH-PE01",FK,t_network_element.ne_id,-
+t_tunnel_perf_kpi,collect_time,Collection Time,采集时间,TIMESTAMP,NO,-,"2025-03-29 08:00:00",时间戳,-,-
+t_tunnel_perf_kpi,granularity_min,Granularity (min),采集粒度,INT,NO,15,"15",分钟,-,-
+t_tunnel_perf_kpi,latency_avg_ms,Latency Avg (ms),平均单向时延,DECIMAL(8.3),YES,-,"12.500;80.000",ms,-,华为iFIT
+t_tunnel_perf_kpi,latency_max_ms,Latency Max (ms),最大时延,DECIMAL(8.3),YES,-,"18.200",ms,-,-
+t_tunnel_perf_kpi,latency_min_ms,Latency Min (ms),最小时延,DECIMAL(8.3),YES,-,"10.100",ms,-,-
+t_tunnel_perf_kpi,jitter_avg_ms,Jitter Avg (ms),平均抖动,DECIMAL(8.3),YES,-,"1.200",ms,-,-
+t_tunnel_perf_kpi,jitter_max_ms,Jitter Max (ms),最大抖动,DECIMAL(8.3),YES,-,"3.500",ms,-,-
+t_tunnel_perf_kpi,packet_loss_rate_pct,Packet Loss Rate (%),丢包率,DECIMAL(5.4),YES,-,"0.0100;0.5000",%,-,-
+t_tunnel_perf_kpi,forward_octets,Forward Octets,转发字节数,BIGINT,YES,0,"50000000000",bytes,-,-
+t_tunnel_perf_kpi,forward_packets,Forward Packets,转发包数,BIGINT,YES,0,"35000000",packets,-,-
+t_tunnel_perf_kpi,bandwidth_usage_pct,Bandwidth Usage (%),隧道带宽利用率,DECIMAL(5.2),YES,-,"55.00",% 0-100,-,-
+t_tunnel_perf_kpi,rtt_avg_ms,RTT Avg (ms),平均往返时延,DECIMAL(8.3),YES,-,"25.000",ms,-,-
+t_tunnel_perf_kpi,rtt_max_ms,RTT Max (ms),最大RTT,DECIMAL(8.3),YES,-,"36.000",ms,-,-
+t_tunnel_perf_kpi,path_change_count,Path Change Count,采集周期内路径变更次数,INT,YES,0,"0;2",≥0,-,-
+t_tunnel_perf_kpi,oper_status,Oper Status,采集时刻隧道运行状态,VARCHAR(16),NO,UP,"UP;DOWN",枚举,-,-
+t_tunnel_perf_kpi,sla_violation,SLA Violation,该采集周期是否发生SLA违规,BOOLEAN,YES,FALSE,"FALSE;TRUE",布尔,-,-
+t_tunnel_perf_kpi,sla_violation_type,SLA Violation Type,"违规指标类型（可多值逗号分隔）",VARCHAR(64),YES,-,"LATENCY;JITTER,LOSS",文本,-,-
+t_tunnel_perf_kpi,created_at,Created At,写入时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 08:01:00",时间戳,-,-
+t_vpn_sla_kpi,kpi_id,KPI ID,记录ID（自增主键）,BIGSERIAL,NO,-,"1;2",PK,-,-
+t_vpn_sla_kpi,vpn_id,VPN ID,VPN业务ID,VARCHAR(64),NO,-,"VPN-001",FK,t_l3vpn_service.vpn_id,-
+t_vpn_sla_kpi,pe_ne_id,PE NE ID,测量发起PE的网元ID,VARCHAR(64),NO,-,"NE-BJ-PE01",FK,t_network_element.ne_id,-
+t_vpn_sla_kpi,remote_pe_ne_id,Remote PE NE ID,对端PE网元ID,VARCHAR(64),YES,-,"NE-SH-PE01",FK,t_network_element.ne_id,-
+t_vpn_sla_kpi,collect_time,Collection Time,采集时间,TIMESTAMP,NO,-,"2025-03-29 08:00:00",时间戳,-,-
+t_vpn_sla_kpi,granularity_min,Granularity (min),采集粒度,INT,NO,15,"15",分钟,-,-
+t_vpn_sla_kpi,e2e_latency_avg_ms,E2E Latency Avg (ms),端到端平均时延,DECIMAL(8.3),YES,-,"15.000",ms,-,-
+t_vpn_sla_kpi,e2e_latency_max_ms,E2E Latency Max (ms),端到端最大时延,DECIMAL(8.3),YES,-,"22.000",ms,-,-
+t_vpn_sla_kpi,e2e_jitter_avg_ms,E2E Jitter Avg (ms),端到端平均抖动,DECIMAL(8.3),YES,-,"2.000",ms,-,-
+t_vpn_sla_kpi,e2e_jitter_max_ms,E2E Jitter Max (ms),端到端最大抖动,DECIMAL(8.3),YES,-,"5.000",ms,-,-
+t_vpn_sla_kpi,e2e_packet_loss_pct,E2E Packet Loss (%),端到端丢包率,DECIMAL(5.4),YES,-,"0.0050",%,-,-
+t_vpn_sla_kpi,availability_pct,Availability (%),可用率,DECIMAL(6.3),YES,-,"99.950;98.500",%,-,-
+t_vpn_sla_kpi,throughput_mbps,Throughput (Mbps),实际吞吐量,DECIMAL(12.2),YES,-,"800.00",Mbps,-,-
+t_vpn_sla_kpi,vpn_route_count,VPN Route Count,VPN路由条数,INT,YES,-,"3500",正整数,-,-
+t_vpn_sla_kpi,route_flap_count,Route Flap Count,路由震荡次数,INT,YES,0,"0;5",≥0,-,-
+t_vpn_sla_kpi,sla_latency_met,SLA Latency Met,时延SLA是否达标,BOOLEAN,YES,TRUE,"TRUE;FALSE",布尔,-,-
+t_vpn_sla_kpi,sla_jitter_met,SLA Jitter Met,抖动SLA是否达标,BOOLEAN,YES,TRUE,"TRUE;FALSE",布尔,-,-
+t_vpn_sla_kpi,sla_loss_met,SLA Loss Met,丢包SLA是否达标,BOOLEAN,YES,TRUE,"TRUE;FALSE",布尔,-,-
+t_vpn_sla_kpi,sla_availability_met,SLA Availability Met,可用率SLA是否达标,BOOLEAN,YES,TRUE,"TRUE;FALSE",布尔,-,-
+t_vpn_sla_kpi,sla_overall_met,SLA Overall Met,综合SLA是否全部达标（全部子项均达标时为TRUE）,BOOLEAN,YES,TRUE,"TRUE;FALSE",布尔,-,-
+t_vpn_sla_kpi,mos_score,MOS Score,平均意见得分（VoIP语音质量评分）,DECIMAL(3.2),YES,-,"4.20;3.50",1.0-5.0,-,ITU-T P.800
+t_vpn_sla_kpi,qos_class_applied,QoS Class Applied,实际应用的QoS策略等级,VARCHAR(32),YES,-,"EF;AF41;BE",DSCP,-,RFC 2474
+t_vpn_sla_kpi,created_at,Created At,写入时间,TIMESTAMP,NO,CURRENT_TIMESTAMP,"2025-03-29 08:01:00",时间戳,-,-

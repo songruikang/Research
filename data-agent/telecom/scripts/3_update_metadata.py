@@ -28,11 +28,16 @@ import time
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TELECOM_DIR = os.path.dirname(SCRIPT_DIR)
 PROJECT_ROOT = os.path.dirname(TELECOM_DIR)
-MDL_PATH = os.path.join(TELECOM_DIR, "telecom_mdl.json")
-LOCAL_DB = os.path.join(PROJECT_ROOT, "wren_ui_db.sqlite3")
-CONTAINER = "wrenai-wren-ui-1"
-REMOTE_DB = "/app/data/db.sqlite3"
-GRAPHQL_URL = "http://localhost:3000/api/graphql"
+MDL_PATH = os.path.join(TELECOM_DIR, "input", "telecom_mdl.json")
+OUTPUT_DIR = os.path.join(TELECOM_DIR, "output")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+LOCAL_DB = os.path.join(OUTPUT_DIR, "wren_ui_db.sqlite3")
+# 容器名和路径 — 可通过环境变量覆盖（公司环境可能不同）
+# Mac 默认: 容器名 wrenai-wren-ui-1, SQLite 在 /app/data/db.sqlite3
+# 公司云主机: 容器名可能不同, SQLite 可能在 /app/db.sqlite3
+CONTAINER = os.environ.get("WREN_UI_CONTAINER", "wrenai-wren-ui-1")
+REMOTE_DB = os.environ.get("WREN_UI_SQLITE_PATH", "/app/data/db.sqlite3")
+GRAPHQL_URL = os.environ.get("WREN_GRAPHQL_URL", "http://localhost:3000/api/graphql")
 
 
 def run(cmd, check=True):
@@ -241,20 +246,38 @@ else:
     sys.exit(1)
 
 step("5. 触发 MDL 部署")
-for attempt in range(3):
-    r = run(f"""curl -s -X POST {GRAPHQL_URL} \
-      -H "Content-Type: application/json" \
-      -d '{{"query":"mutation {{ deploy }}"}}' """)
-    result = json.loads(r.stdout)
-    status = result.get("data", {}).get("deploy", {}).get("status", "UNKNOWN")
-    if status == "SUCCESS":
-        print(f"  部署成功 (第{attempt+1}次)")
-        break
-    else:
-        print(f"  第{attempt+1}次部署: {status}，等待索引完成后重试...")
-        time.sleep(15)
+# deploy 是同步调用，等 AI service 重建向量索引完成后返回
+# 本地大模型环境下可能需要 2-5 分钟，curl 默认超时可能不够
+print("  正在部署（本地模型可能需要几分钟，请耐心等待）...")
+r = run(f"""curl -s --max-time 300 -X POST {GRAPHQL_URL} \
+  -H "Content-Type: application/json" \
+  -d '{{"query":"mutation {{ deploy(force: true) }}"}}' """, check=False)
+if r.returncode == 0 and r.stdout:
+    try:
+        result = json.loads(r.stdout)
+        # GraphQL 可能返回 {"errors": [...]} 或 {"data": {"deploy": {"status": "..."}}}
+        if "errors" in result:
+            print(f"  部署返回错误: {result['errors'][0].get('message', str(result['errors']))}")
+            print(f"  请在 UI 的 Modeling 页面手动点击 Deploy")
+        elif result.get("data") and result["data"].get("deploy"):
+            status = result["data"]["deploy"].get("status", "UNKNOWN")
+            if status == "SUCCESS":
+                print(f"  部署成功")
+            else:
+                error = result["data"]["deploy"].get("error", "")
+                print(f"  部署状态: {status}")
+                if error:
+                    print(f"  错误: {error}")
+                print(f"  如果失败，请在 UI 的 Modeling 页面手动点击 Deploy")
+        else:
+            print(f"  部署响应异常: {r.stdout[:200]}")
+            print(f"  请在 UI 的 Modeling 页面手动点击 Deploy")
+    except json.JSONDecodeError:
+        print(f"  响应解析失败: {r.stdout[:200]}")
+        print(f"  请在 UI 的 Modeling 页面手动点击 Deploy")
 else:
-    print("  ⚠ 部署3次均未成功，请手动在 UI 中触发部署")
+    print(f"  部署请求超时或失败（这在本地大模型环境下是正常的）")
+    print(f"  请在 UI 的 Modeling 页面手动点击 Deploy")
 
 # ---------------------------------------------------------------------------
 # Step 5: 验证

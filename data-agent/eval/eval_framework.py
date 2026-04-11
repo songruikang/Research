@@ -236,8 +236,8 @@ def print_report(eval_result: dict, experiment_name: str = ""):
 if __name__ == "__main__":
     # 用法: python eval_framework.py <generated_sqls.json> [experiment_name]
     eval_dir = Path(__file__).resolve().parent
-    db_path = str(PROJECT_ROOT / "telecom_nms.duckdb")
-    mdl_path = str(PROJECT_ROOT / "telecom" / "telecom_mdl.json")
+    db_path = str(PROJECT_ROOT / "telecom" / "output" / "telecom_nms.duckdb")
+    mdl_path = str(PROJECT_ROOT / "telecom" / "input" / "telecom_mdl.json")
     test_cases_path = str(eval_dir / "telecom_test_cases_100.json")
 
     if len(sys.argv) < 2:
@@ -247,9 +247,9 @@ if __name__ == "__main__":
         sys.exit(0)
 
     generated_file = sys.argv[1]
-    # 如果是相对路径，相对于 eval/ 目录
+    # 相对路径相对于 CWD（从项目根目录运行时）
     if not Path(generated_file).is_absolute():
-        generated_file = str(eval_dir / generated_file)
+        generated_file = str(Path.cwd() / generated_file)
     exp_name = sys.argv[2] if len(sys.argv) > 2 else "unnamed"
 
     with open(test_cases_path) as f:

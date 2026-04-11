@@ -1,25 +1,15 @@
 """
-Generate realistic mock data for the 14-table telecom NMS schema and insert
-into a DuckDB database.
+Mock 数据生成模块 — 内部模块，由 scripts/1_generate_data.py 调用。
 
-Usage:
-    python -m telecom.generate_mock_data
+不要直接运行此文件。
 """
 
 import json
 import random
 import uuid
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import numpy as np
-
-try:
-    import duckdb
-except ImportError:
-    raise ImportError("duckdb is required: pip install duckdb")
-
-from telecom.csv_to_ddl import generate_ddl
 
 random.seed(42)
 np.random.seed(42)
@@ -1591,88 +1581,51 @@ _INSERT_SQL = {
 # Main entry point
 # ===========================================================================
 
-def generate_and_populate(
-    db_path: str = "telecom_nms.duckdb",
-    csv_path: str = "WrenAI/nms_field_dictionary_full.csv",
-):
-    """Create DuckDB database with schema and mock data."""
-    import os
+def populate_data(con):
+    """向已建好表的 DuckDB 连接中插入 mock 数据。由 1_generate_data.py 调用。"""
 
-    # Remove existing DB to start fresh
-    if os.path.exists(db_path):
-        os.remove(db_path)
-
-    con = duckdb.connect(db_path)
-
-    # ------------------------------------------------------------------
-    # 1. Create tables from DDL
-    # ------------------------------------------------------------------
-    print("Creating tables from DDL ...")
-    ddl_statements = generate_ddl(csv_path)
-    for stmt in ddl_statements:
-        con.execute(stmt)
-    print(f"  Created {len(ddl_statements)} tables.")
-
-    # ------------------------------------------------------------------
-    # 2. Generate and insert OLTP data (FK dependency order)
-    # ------------------------------------------------------------------
-    print("Generating OLTP data ...")
-
-    # t_site
+    print("生成 OLTP 数据 ...")
     site_rows = _generate_sites()
     con.executemany(_INSERT_SQL["t_site"], site_rows)
     print(f"  t_site: {len(site_rows)} rows")
 
-    # t_network_element
     ne_rows, ne_list = _generate_network_elements(site_rows)
     con.executemany(_INSERT_SQL["t_network_element"], ne_rows)
     print(f"  t_network_element: {len(ne_rows)} rows")
 
-    # t_board
     board_rows, board_list = _generate_boards(ne_list)
     con.executemany(_INSERT_SQL["t_board"], board_rows)
     print(f"  t_board: {len(board_rows)} rows")
 
-    # t_interface
     if_rows, if_list = _generate_interfaces(ne_list, board_list)
     con.executemany(_INSERT_SQL["t_interface"], if_rows)
     print(f"  t_interface: {len(if_rows)} rows")
 
-    # t_vrf_instance (needs NE list - PE only)
     vrf_rows, vrf_list = _generate_vrf_instances(ne_list)
     con.executemany(_INSERT_SQL["t_vrf_instance"], vrf_rows)
     print(f"  t_vrf_instance: {len(vrf_rows)} rows")
 
-    # t_l3vpn_service
     vpn_rows, vpn_list = _generate_l3vpn_services()
     con.executemany(_INSERT_SQL["t_l3vpn_service"], vpn_rows)
     print(f"  t_l3vpn_service: {len(vpn_rows)} rows")
 
-    # t_physical_link (needs NEs and interfaces)
     link_rows, link_list = _generate_physical_links(ne_list, if_list)
     con.executemany(_INSERT_SQL["t_physical_link"], link_rows)
     print(f"  t_physical_link: {len(link_rows)} rows")
 
-    # t_vpn_pe_binding
     binding_rows, binding_list = _generate_vpn_pe_bindings(vpn_list, ne_list, vrf_list, if_list)
     con.executemany(_INSERT_SQL["t_vpn_pe_binding"], binding_rows)
     print(f"  t_vpn_pe_binding: {len(binding_rows)} rows")
 
-    # t_srv6_policy
     policy_rows, policy_list = _generate_srv6_policies(ne_list)
     con.executemany(_INSERT_SQL["t_srv6_policy"], policy_rows)
     print(f"  t_srv6_policy: {len(policy_rows)} rows")
 
-    # t_tunnel
     tunnel_rows, tunnel_list = _generate_tunnels(ne_list, policy_list, vpn_list)
     con.executemany(_INSERT_SQL["t_tunnel"], tunnel_rows)
     print(f"  t_tunnel: {len(tunnel_rows)} rows")
 
-    # ------------------------------------------------------------------
-    # 3. Generate and insert OLAP/KPI data
-    # ------------------------------------------------------------------
-    print("Generating OLAP/KPI data ...")
-
+    print("\n生成 KPI 数据 ...")
     ne_kpi_rows = _generate_ne_perf_kpi(ne_list)
     con.executemany(_INSERT_SQL["t_ne_perf_kpi"], ne_kpi_rows)
     print(f"  t_ne_perf_kpi: {len(ne_kpi_rows)} rows")
@@ -1689,10 +1642,7 @@ def generate_and_populate(
     con.executemany(_INSERT_SQL["t_vpn_sla_kpi"], vpn_kpi_rows)
     print(f"  t_vpn_sla_kpi: {len(vpn_kpi_rows)} rows")
 
-    # ------------------------------------------------------------------
-    # 4. Print summary
-    # ------------------------------------------------------------------
-    print("\n=== Database Summary ===")
+    print("\n=== 汇总 ===")
     total = 0
     for tbl in [
         "t_site", "t_network_element", "t_board", "t_interface",
@@ -1705,10 +1655,3 @@ def generate_and_populate(
         print(f"  {tbl:30s}  {count:>8,d} rows")
         total += count
     print(f"  {'TOTAL':30s}  {total:>8,d} rows")
-    print(f"\nDatabase written to: {db_path}")
-
-    con.close()
-
-
-if __name__ == "__main__":
-    generate_and_populate()
