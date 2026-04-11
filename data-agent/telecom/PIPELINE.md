@@ -164,6 +164,39 @@ cd WrenAI/docker && docker compose -f docker-compose-dev.yaml up -d
 
 ---
 
+## LLM Trace / Logs 系统
+
+WrenAI 二次开发中加入了 LLM 调用追踪系统，用于记录和查看每次 NL2SQL 查询的完整 LLM 调用链。
+
+### 工作原理
+
+1. **trace_callback.py** 以 `sitecustomize.py` 方式挂载到 ai-service 容器，Python 启动时自动加载
+2. 所有 LLM 调用被拦截记录，写入 `/app/data/llm_traces.jsonl`（宿主机 `docker/data/llm_traces.jsonl`）
+3. wren-ui 容器通过 `/app/llm_data` 只读挂载读取该 JSONL 文件
+4. 数据导入到 SQLite 的 `trace_query` / `trace_step` 两张表
+5. UI 的 **Logs 页面** (`/logs`) 展示追踪记录
+
+### 数据库迁移
+
+migration 文件 `wren-ui/migrations/20250512000000_create_trace_tables.js` 在 wren-ui 容器启动时自动执行（CMD 为 `yarn knex migrate:latest && ...`），无需手动操作。
+
+### Docker 挂载要点
+
+| 容器 | 挂载 | 说明 |
+|------|------|------|
+| ai-service | `trace_callback.py → sitecustomize.py` (:ro) | 追踪回调注入 |
+| ai-service | `data:/app/data` (读写) | 写入 llm_traces.jsonl |
+| wren-ui | `data:/app/llm_data` (:ro) | 读取 llm_traces.jsonl |
+
+### 修改 trace_callback.py 后
+
+重启 ai-service 即可生效：
+```bash
+docker compose -f docker-compose-dev.yaml restart wren-ai-service
+```
+
+---
+
 ## 废弃文件
 
 | 文件 | 原用途 | 现状 |
