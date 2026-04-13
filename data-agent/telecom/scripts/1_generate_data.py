@@ -127,9 +127,8 @@ def main():
     print()
 
     # 生成 mock 数据
-    # 将 _internal 加入 path
-    sys.path.insert(0, str(TELECOM_DIR))
-    from _internal.generate_mock_data import populate_data
+    sys.path.insert(0, str(TELECOM_DIR / "scripts"))
+    from generate_mock_data import populate_data
 
     populate_data(conn)
     conn.close()

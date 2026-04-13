@@ -1031,16 +1031,16 @@ def _generate_tunnels(ne_list, policy_list, vpn_list):
 
 
 # ---------------------------------------------------------------------------
-# t_ne_perf_kpi  (~9600 rows)
+# t_ne_perf_kpi  (~67200 rows)
 # ---------------------------------------------------------------------------
 
 def _generate_ne_perf_kpi(ne_list):
-    """50 NEs x 192 time points = 9600 rows."""
+    """50 NEs x 1344 time points = 67200 rows."""
     n_nes = len(ne_list)
-    n_points = 192  # 2 days, 15-min granularity
+    n_points = 1344  # 14 days, 15-min granularity
 
-    # Time points: past 2 days
-    start_time = NOW - timedelta(days=2)
+    # Time points: past 14 days
+    start_time = NOW - timedelta(days=14)
     times = [start_time + timedelta(minutes=15 * t) for t in range(n_points)]
 
     rows = []
@@ -1130,17 +1130,17 @@ def _generate_ne_perf_kpi(ne_list):
 # ---------------------------------------------------------------------------
 
 def _generate_interface_perf_kpi(if_list, ne_list):
-    """Sample 30% of PHYSICAL interfaces x ~55 time points."""
+    """Sample 30% of PHYSICAL interfaces x ~55 time points (from 14-day window)."""
     phy_ifs = [iface for iface in if_list if iface["if_type"] == "PHYSICAL"]
     sampled = random.sample(phy_ifs, max(1, int(len(phy_ifs) * 0.30)))
 
     ne_lookup = {ne["ne_id"]: ne for ne in ne_list}
 
     n_points = 55
-    start_time = NOW - timedelta(days=2)
-    # Pick 55 evenly spaced points from 192
-    step = 192 // n_points
-    time_indices = list(range(0, 192, step))[:n_points]
+    start_time = NOW - timedelta(days=14)
+    # Pick 55 evenly spaced points from 1344
+    step = 1344 // n_points
+    time_indices = list(range(0, 1344, step))[:n_points]
     times = [start_time + timedelta(minutes=15 * t) for t in time_indices]
 
     rows = []
@@ -1228,13 +1228,13 @@ def _generate_interface_perf_kpi(if_list, ne_list):
 # ---------------------------------------------------------------------------
 
 def _generate_tunnel_perf_kpi(tunnel_list, vpn_list):
-    """Sample 50% of tunnels x ~75 time points."""
+    """Sample 50% of tunnels x ~75 time points (from 14-day window)."""
     sampled = random.sample(tunnel_list, max(1, int(len(tunnel_list) * 0.5)))
 
     n_points = 75
-    start_time = NOW - timedelta(days=2)
-    step = 192 // n_points
-    time_indices = list(range(0, 192, step))[:n_points]
+    start_time = NOW - timedelta(days=14)
+    step = 1344 // n_points
+    time_indices = list(range(0, 1344, step))[:n_points]
     times = [start_time + timedelta(minutes=15 * t) for t in time_indices]
 
     # Build VPN lookup for max_latency
@@ -1325,12 +1325,12 @@ def _generate_tunnel_perf_kpi(tunnel_list, vpn_list):
 # ---------------------------------------------------------------------------
 
 def _generate_vpn_sla_kpi(vpn_list, ne_list):
-    """All 30 VPNs x ~67 time points."""
+    """All 30 VPNs x ~67 time points (from 14-day window)."""
     pe_nes = [ne for ne in ne_list if ne["role"] == "PE"]
     n_points = 67
-    start_time = NOW - timedelta(days=2)
-    step = 192 // n_points
-    time_indices = list(range(0, 192, step))[:n_points]
+    start_time = NOW - timedelta(days=14)
+    step = 1344 // n_points
+    time_indices = list(range(0, 1344, step))[:n_points]
     times = [start_time + timedelta(minutes=15 * t) for t in time_indices]
 
     rows = []
@@ -1578,6 +1578,233 @@ _INSERT_SQL = {
 
 
 # ===========================================================================
+# Anomaly injection — ensures edge-case test queries return non-zero rows
+# ===========================================================================
+
+def _inject_anomalies(con):
+    """Inject edge-case data to ensure all 100 test cases return non-zero rows."""
+
+    # Q18: admin_status=DOWN but oper_status=UP (2 devices)
+    con.execute("""
+        UPDATE t_network_element SET admin_status='DOWN'
+        WHERE ne_id IN (SELECT ne_id FROM t_network_element WHERE oper_status='UP' LIMIT 2)
+    """)
+
+    # Q24: P devices with mpls_enabled=FALSE (2 devices)
+    con.execute("""
+        UPDATE t_network_element SET mpls_enabled=FALSE
+        WHERE ne_id IN (SELECT ne_id FROM t_network_element WHERE role='P' LIMIT 2)
+    """)
+
+    # Q31: Has srv6_locator but srv6_enabled=FALSE (2 devices)
+    con.execute("""
+        UPDATE t_network_element SET srv6_enabled=FALSE
+        WHERE ne_id IN (SELECT ne_id FROM t_network_element WHERE srv6_locator IS NOT NULL AND srv6_enabled LIMIT 2)
+    """)
+
+    # Q16/Q47: Sites with contract expiring within 90 days
+    # 使用固定偏移而不是 DATE '2025-03-29'（因为 refresh_timestamps 会平移日期）
+    con.execute(f"""
+        UPDATE t_site SET contract_expire_date = DATE '{NOW.strftime("%Y-%m-%d")}' + INTERVAL 30 DAY
+        WHERE site_id IN (SELECT site_id FROM t_site WHERE status='ACTIVE' LIMIT 3)
+    """)
+
+    # Q34: VPN with contract already expired but still ACTIVE
+    con.execute(f"""
+        UPDATE t_l3vpn_service SET contract_end_date = DATE '{NOW.strftime("%Y-%m-%d")}' - INTERVAL 30 DAY
+        WHERE vpn_id IN (SELECT vpn_id FROM t_l3vpn_service WHERE admin_status='ACTIVE' LIMIT 2)
+    """)
+
+    # Q37: Explicit path SRv6 Policy with LOW_LATENCY and max_latency < 10ms
+    con.execute("""
+        UPDATE t_srv6_policy SET explicit_path=TRUE, sla_type='LOW_LATENCY', max_latency_ms=5.0
+        WHERE policy_id IN (SELECT policy_id FROM t_srv6_policy LIMIT 2)
+    """)
+
+    # Q40: Interface oper=UP but latest KPI sample shows oper=DOWN
+    con.execute("""
+        UPDATE t_interface_perf_kpi SET oper_status='DOWN'
+        WHERE kpi_id IN (
+            SELECT k.kpi_id FROM t_interface_perf_kpi k
+            JOIN t_interface i ON k.if_id = i.if_id
+            WHERE i.oper_status='UP'
+            ORDER BY k.collect_time DESC LIMIT 5
+        )
+    """)
+
+    # Q50: VRF route utilization > 80%
+    con.execute("""
+        UPDATE t_vrf_instance SET current_route_count = max_routes - 1
+        WHERE vrf_id IN (SELECT vrf_id FROM t_vrf_instance WHERE max_routes > 0 LIMIT 3)
+    """)
+
+    # Q55: Same customer with both SRV6_TE and MPLS_TE
+    con.execute("""
+        UPDATE t_l3vpn_service SET underlay_type='MPLS_TE'
+        WHERE vpn_id IN (
+            SELECT vpn_id FROM t_l3vpn_service
+            WHERE customer_id IN (SELECT customer_id FROM t_l3vpn_service WHERE underlay_type='SRV6_TE' LIMIT 1)
+            AND underlay_type != 'SRV6_TE'
+            LIMIT 1
+        )
+    """)
+
+    # Q59: VRF with tunnel_policy but no RT import/export
+    con.execute("""
+        UPDATE t_vrf_instance SET vpn_target_import=NULL, vpn_target_export=NULL
+        WHERE vrf_id IN (SELECT vrf_id FROM t_vrf_instance WHERE tunnel_policy IS NOT NULL AND tunnel_policy != '' LIMIT 2)
+    """)
+
+    # Q76: Devices with no board records — 插入没有板卡的新设备（避免外键级联问题）
+    import uuid as _uuid
+    for i in range(2):
+        nid = str(_uuid.uuid4())
+        con.execute(f"""
+            INSERT INTO t_network_element (ne_id, ne_name, ne_type, vendor, model, role,
+                management_ip, admin_status, oper_status, created_at, updated_at)
+            VALUES ('{nid}', 'NOBOARD-TEST-{i+1}', 'ROUTER', 'HUAWEI', 'NE40E-X16A', 'CE',
+                '10.99.99.{i+1}', 'UP', 'UP', TIMESTAMP '2025-03-29 12:00:00', TIMESTAMP '2025-03-29 12:00:00')
+        """)
+
+    # Q83: VPN binding with VRF that has current_route_count=0
+    con.execute("""
+        UPDATE t_vrf_instance SET current_route_count=0
+        WHERE vrf_id IN (
+            SELECT v.vrf_id FROM t_vrf_instance v
+            JOIN t_vpn_pe_binding b ON v.vrf_id = b.vrf_id
+            LIMIT 3
+        )
+    """)
+
+    # Q42: BGP peer availability < 80%
+    con.execute("""
+        UPDATE t_ne_perf_kpi SET bgp_peer_up_count = 1, bgp_peer_total_count = 5
+        WHERE kpi_id IN (
+            SELECT kpi_id FROM t_ne_perf_kpi
+            WHERE ne_id IN (SELECT ne_id FROM t_network_element LIMIT 2)
+            ORDER BY collect_time DESC LIMIT 200
+        )
+    """)
+
+    # Q46: Temperature exceeding board threshold
+    con.execute("""
+        UPDATE t_ne_perf_kpi SET temperature_avg_c = 85.0, temperature_max_c = 92.0
+        WHERE kpi_id IN (
+            SELECT kpi_id FROM t_ne_perf_kpi
+            WHERE ne_id IN (SELECT ne_id FROM t_board WHERE temperature_threshold IS NOT NULL LIMIT 1)
+            ORDER BY collect_time DESC LIMIT 50
+        )
+    """)
+
+    # Q92: High CPU (>80%) AND high interface errors (>1000) for same device
+    con.execute("""
+        UPDATE t_interface_perf_kpi SET in_error_packets = 500, out_error_packets = 600
+        WHERE kpi_id IN (
+            SELECT k.kpi_id FROM t_interface_perf_kpi k
+            WHERE k.ne_id IN (SELECT ne_id FROM t_network_element LIMIT 2)
+            ORDER BY k.collect_time DESC LIMIT 200
+        )
+    """)
+
+    # Q98: Tunnels with path changes AND high jitter
+    con.execute("""
+        UPDATE t_tunnel_perf_kpi SET path_change_count = 3, jitter_avg_ms = 15.0
+        WHERE kpi_id IN (
+            SELECT kpi_id FROM t_tunnel_perf_kpi ORDER BY collect_time DESC LIMIT 20
+        )
+    """)
+
+    # Q94: Tunnel latency exceeding policy constraint
+    con.execute("""
+        UPDATE t_tunnel_perf_kpi SET latency_avg_ms = 100.0
+        WHERE kpi_id IN (
+            SELECT k.kpi_id FROM t_tunnel_perf_kpi k
+            JOIN t_tunnel t ON k.tunnel_id = t.tunnel_id
+            WHERE t.policy_id IS NOT NULL
+            ORDER BY k.collect_time DESC LIMIT 30
+        )
+    """)
+
+    # ── 精确修复（hotfix 验证后固化）──
+
+    # Q14: 对比上周/本周带宽增长>20% — 某站点上周低利用率+本周高利用率
+    site_row = con.execute("""
+        SELECT ne.site_id FROM t_interface_perf_kpi k
+        JOIN t_network_element ne ON k.ne_id=ne.ne_id
+        WHERE k.collect_time >= DATE '2025-03-29' - 14
+        GROUP BY ne.site_id
+        HAVING COUNT(DISTINCT CASE WHEN k.collect_time >= DATE '2025-03-29' - 7 THEN 1 END) > 0
+        AND COUNT(DISTINCT CASE WHEN k.collect_time < DATE '2025-03-29' - 7 THEN 1 END) > 0
+        LIMIT 1
+    """).fetchone()
+    if site_row:
+        sid = site_row[0]
+        con.execute(f"UPDATE t_interface_perf_kpi SET out_bandwidth_usage_pct=10.0 WHERE ne_id IN (SELECT ne_id FROM t_network_element WHERE site_id='{sid}') AND collect_time < DATE '2025-03-29' - 7")
+        con.execute(f"UPDATE t_interface_perf_kpi SET out_bandwidth_usage_pct=60.0 WHERE ne_id IN (SELECT ne_id FROM t_network_element WHERE site_id='{sid}') AND collect_time >= DATE '2025-03-29' - 7")
+
+    # Q46: 降低板卡温度阈值使实际温度超标
+    con.execute("UPDATE t_board SET temperature_threshold=40.0 WHERE board_id IN (SELECT board_id FROM t_board WHERE temperature_threshold IS NOT NULL LIMIT 3)")
+
+    # Q47: VPN 合同 15 天后到期（30天内）
+    con.execute("UPDATE t_l3vpn_service SET contract_end_date = DATE '2025-03-29' + INTERVAL 15 DAY WHERE vpn_id IN (SELECT vpn_id FROM t_l3vpn_service ORDER BY monthly_fee DESC LIMIT 3)")
+
+    # Q51: BFD 启用且状态翻转>3次
+    con.execute("""
+        UPDATE t_interface_perf_kpi SET status_change_count = 5
+        WHERE if_id IN (SELECT if_id FROM t_interface WHERE bfd_enabled LIMIT 3)
+        AND collect_time >= TIMESTAMP '2025-03-29 12:00:00' - INTERVAL 24 HOUR
+    """)
+
+    # Q55: 同客户双承载（找有多条VPN的客户，一条设SRV6_TE另一条设MPLS_TE）
+    multi_vpn_customer = con.execute("SELECT customer_id FROM t_l3vpn_service GROUP BY customer_id HAVING COUNT(*)>=2 LIMIT 1").fetchone()
+    if multi_vpn_customer:
+        cid = multi_vpn_customer[0]
+        vpns = con.execute(f"SELECT vpn_id FROM t_l3vpn_service WHERE customer_id='{cid}' LIMIT 2").fetchall()
+        if len(vpns) >= 2:
+            con.execute(f"UPDATE t_l3vpn_service SET underlay_type='SRV6_TE' WHERE vpn_id='{vpns[0][0]}'")
+            con.execute(f"UPDATE t_l3vpn_service SET underlay_type='MPLS_TE' WHERE vpn_id='{vpns[1][0]}'")
+
+    # Q63: 设备综合健康分低于60 — CPU+内存+温度+告警全高
+    con.execute("""
+        UPDATE t_ne_perf_kpi SET cpu_usage_avg_pct=85, memory_usage_avg_pct=85,
+            temperature_avg_c=70, alarm_critical_count=3, alarm_major_count=5
+        WHERE ne_id IN (SELECT ne_id FROM t_network_element WHERE role='PE' LIMIT 1)
+        AND collect_time >= TIMESTAMP '2025-03-29 12:00:00' - INTERVAL 7 DAY
+    """)
+
+    # Q70: SRv6 PE + LOW_LATENCY Policy + CPU>70
+    pe_row = con.execute("SELECT ne_id FROM t_network_element WHERE srv6_enabled AND role='PE' LIMIT 1").fetchone()
+    if pe_row:
+        nid = pe_row[0]
+        pol = con.execute(f"SELECT policy_id FROM t_srv6_policy WHERE source_ne_id='{nid}' LIMIT 1").fetchone()
+        if pol:
+            con.execute(f"UPDATE t_srv6_policy SET sla_type='LOW_LATENCY' WHERE policy_id='{pol[0]}'")
+        con.execute(f"UPDATE t_ne_perf_kpi SET cpu_usage_avg_pct=75.0 WHERE ne_id='{nid}' AND collect_time >= TIMESTAMP '2025-03-29 12:00:00' - INTERVAL 7 DAY")
+
+    # Q92: 高CPU + 高接口错误（同一设备）
+    con.execute("""
+        UPDATE t_interface_perf_kpi SET in_error_packets=600, out_error_packets=500
+        WHERE ne_id IN (SELECT ne_id FROM t_ne_perf_kpi WHERE cpu_usage_avg_pct > 80 GROUP BY ne_id LIMIT 1)
+        AND collect_time >= TIMESTAMP '2025-03-29 12:00:00' - INTERVAL 7 DAY
+    """)
+
+    # Q93: GOLD + SRV6_TE + 最新时延不达标
+    gold_vpn = con.execute("SELECT vpn_id FROM t_l3vpn_service WHERE service_level='GOLD' AND underlay_type='SRV6_TE' LIMIT 1").fetchone()
+    if not gold_vpn:
+        gold_vpn = con.execute("SELECT vpn_id FROM t_l3vpn_service WHERE service_level='GOLD' LIMIT 1").fetchone()
+        if gold_vpn:
+            con.execute(f"UPDATE t_l3vpn_service SET underlay_type='SRV6_TE' WHERE vpn_id='{gold_vpn[0]}'")
+    if gold_vpn:
+        con.execute(f"""
+            UPDATE t_vpn_sla_kpi SET sla_latency_met=FALSE, sla_overall_met=FALSE
+            WHERE vpn_id='{gold_vpn[0]}'
+            AND collect_time = (SELECT MAX(collect_time) FROM t_vpn_sla_kpi WHERE vpn_id='{gold_vpn[0]}')
+        """)
+
+    print("  异常数据注入完成")
+
+
+# ===========================================================================
 # Main entry point
 # ===========================================================================
 
@@ -1641,6 +1868,9 @@ def populate_data(con):
     vpn_kpi_rows = _generate_vpn_sla_kpi(vpn_list, ne_list)
     con.executemany(_INSERT_SQL["t_vpn_sla_kpi"], vpn_kpi_rows)
     print(f"  t_vpn_sla_kpi: {len(vpn_kpi_rows)} rows")
+
+    print("\n注入异常/边界数据 ...")
+    _inject_anomalies(con)
 
     print("\n=== 汇总 ===")
     total = 0
