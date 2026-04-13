@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NL2SQL Trace / Logs Viewer v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f5f5;
+  --card-bg: #ffffff;
+  --border: #e8e8e8;
+  --text: #1f1f1f;
+  --text-secondary: #8c8c8c;
+  --primary: #1677ff;
+  --success: #52c41a;
+  --model-error: #fa8c16;
+  --sql-error: #ff4d4f;
+  --no-result: #1890ff;
+  --exec-fail: #cf1322;
+  --code-bg: #f6f8fa;
+  --sql-bg: #f0f4f8;
+  --hover: #f0f5ff;
+  --shadow: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.1);
+  --shadow-hover: 0 2px 8px rgba(0,0,0,0.12);
+  --radius: 8px;
+  --mono: 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; }
+
+/* ── Top Bar ── */
+.top-bar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.top-bar-left { display: flex; align-items: center; gap: 16px; }
+.top-bar h1 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.top-bar h1 .icon { font-size: 18px; }
+
+/* Summary stats */
+.summary-stats { display: flex; gap: 14px; flex-wrap: wrap; }
+.stat-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+.stat-item .stat-value { font-family: var(--mono); font-weight: 600; color: var(--text); font-size: 13px; }
+.stat-item .sv-success { color: var(--success); }
+.stat-item .sv-model-err { color: var(--model-error); }
+.stat-item .sv-sql-err { color: var(--sql-error); }
+.stat-item .sv-no-result { color: var(--no-result); }
+.stat-item .sv-exec-fail { color: var(--exec-fail); }
+
+.top-bar-right { display: flex; align-items: center; gap: 10px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--card-bg); color: var(--text); font-size: 12px; cursor: pointer;
+  transition: all 0.15s; font-family: var(--sans);
+}
+.btn:hover { border-color: var(--primary); color: var(--primary); }
+.btn-danger:hover { border-color: var(--sql-error); color: var(--sql-error); }
+
+/* ── Source Tags ── */
+.source-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 7px; border-radius: 8px; font-size: 10px; font-weight: 500;
+  line-height: 1.6; white-space: nowrap; vertical-align: middle;
+}
+.source-tag-user { background: #e6f4ff; color: #1677ff; }
+.source-tag-recommendation { background: #f3e8ff; color: #722ed1; }
+.source-tag-system { background: #f0f0f0; color: #8c8c8c; }
+
+/* ── View Tabs ── */
+.view-tabs {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex; gap: 0;
+}
+.view-tab {
+  padding: 10px 20px; font-size: 13px; font-weight: 500; cursor: pointer;
+  border-bottom: 2px solid transparent; color: var(--text-secondary);
+  transition: all 0.15s; user-select: none;
+}
+.view-tab:hover { color: var(--text); }
+.view-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* ── Toolbar (filter area) ── */
+.toolbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 24px;
+  display: flex; align-items: center; gap: 12px;
+}
+.toolbar label { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.toolbar select {
+  padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border);
+  font-size: 12px; font-family: var(--sans); background: var(--card-bg); cursor: pointer;
+}
+
+/* ── Main Layout ── */
+.main { display: flex; height: calc(100vh - 126px); }
+.view-container { width: 100%; height: 100%; display: none !important; }
+.view-container.active { display: flex !important; }
+.left-panel {
+  width: 380px; min-width: 380px; background: var(--card-bg);
+  border-right: 1px solid var(--border); overflow-y: auto;
+}
+.right-panel { flex: 1; overflow-y: auto; padding: 20px 28px; }
+
+/* Query list items */
+.query-item {
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background 0.12s; position: relative;
+}
+.query-item:hover { background: var(--hover); }
+.query-item.active { background: #e6f4ff; border-right: 3px solid var(--primary); }
+.query-item .q-index {
+  font-family: var(--mono); font-size: 11px; color: var(--text-secondary);
+  margin-bottom: 2px; display: flex; align-items: center; gap: 6px;
+}
+.query-item .q-text {
+  font-size: 13px; font-weight: 500; line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.query-item .q-meta {
+  display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 11px; color: var(--text-secondary);
+}
+.query-item .q-meta .q-time { font-family: var(--mono); }
+.query-item .q-dur-bar-wrap {
+  width: 60px; height: 4px; background: #f0f0f0; border-radius: 2px; overflow: hidden; flex-shrink: 0;
+}
+.query-item .q-dur-bar {
+  height: 100%; border-radius: 2px; background: var(--primary); transition: width 0.3s;
+}
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0;
+}
+.status-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500;
+}
+.status-success { background: #f6ffed; color: #389e0d; }
+.status-success .status-dot { background: var(--success); }
+.status-warn { background: #fffbe6; color: #d48806; }
+.status-warn .status-dot { background: #faad14; }
+.status-error { background: #fff2f0; color: #cf1322; }
+.status-error .status-dot { background: var(--sql-error); }
+.status-model-error { background: #fff7e6; color: #d46b08; }
+.status-model-error .status-dot { background: var(--model-error); }
+.status-sql-error { background: #fff2f0; color: #cf1322; }
+.status-sql-error .status-dot { background: var(--sql-error); }
+.status-no-result { background: #e6f7ff; color: #096dd9; }
+.status-no-result .status-dot { background: var(--no-result); }
+.status-exec-fail { background: #fff1f0; color: #a8071a; }
+.status-exec-fail .status-dot { background: var(--exec-fail); }
+
+/* ── Right Panel: Timeline ── */
+.timeline-header { margin-bottom: 20px; }
+.timeline-header .th-question {
+  font-size: 16px; font-weight: 600; line-height: 1.5; margin-bottom: 8px;
+}
+.timeline-header .th-meta {
+  display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); align-items: center;
+}
+.timeline-header .th-meta span { font-family: var(--mono); }
+.timeline-actions {
+  display: flex; gap: 8px; margin-bottom: 12px;
+}
+
+.timeline { position: relative; padding-left: 28px; }
+.timeline::before {
+  content: ''; position: absolute; left: 9px; top: 12px; bottom: 12px;
+  width: 2px; border-left: 2px dashed #d9d9d9;
+}
+.timeline-step { position: relative; margin-bottom: 16px; }
+.timeline-step .step-dot {
+  position: absolute; left: -28px; top: 14px; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--card-bg); border: 2px solid #d9d9d9;
+  display: flex; align-items: center; justify-content: center; font-size: 10px; z-index: 2;
+}
+.timeline-step.s-success .step-dot { border-color: var(--success); color: var(--success); }
+.timeline-step.s-warn .step-dot { border-color: #faad14; color: #faad14; }
+.timeline-step.s-error .step-dot { border-color: var(--sql-error); color: var(--sql-error); }
+.timeline-step.s-model-error .step-dot { border-color: var(--model-error); color: var(--model-error); }
+.timeline-step.s-sql-error .step-dot { border-color: var(--sql-error); color: var(--sql-error); }
+.timeline-step.s-no-result .step-dot { border-color: var(--no-result); color: var(--no-result); }
+.timeline-step.s-exec-fail .step-dot { border-color: var(--exec-fail); color: var(--exec-fail); }
+
+.step-card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; transition: box-shadow 0.15s; cursor: pointer;
+  border-left: 3px solid #d9d9d9;
+}
+.step-card:hover { box-shadow: var(--shadow-hover); }
+.s-success .step-card { border-left-color: var(--success); }
+.s-warn .step-card { border-left-color: #faad14; }
+.s-error .step-card { border-left-color: var(--sql-error); }
+.s-model-error .step-card { border-left-color: var(--model-error); }
+.s-sql-error .step-card { border-left-color: var(--sql-error); }
+.s-no-result .step-card { border-left-color: var(--no-result); }
+.s-exec-fail .step-card { border-left-color: var(--exec-fail); }
+
+.step-card-header {
+  padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.step-name { font-weight: 600; font-size: 13px; }
+.step-name .step-name-en { color: var(--text-secondary); font-weight: 400; margin-left: 4px; }
+.step-model {
+  font-size: 11px; background: #f0f0f0; padding: 1px 8px; border-radius: 4px;
+  font-family: var(--mono); color: var(--text-secondary);
+}
+.step-timestamp { font-size: 11px; font-family: var(--mono); color: var(--text-secondary); }
+.step-status-badge { margin-left: auto; }
+.btn-jump-sql {
+  padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border);
+  background: #f0f5ff; font-size: 10px; cursor: pointer; color: var(--primary);
+  font-family: var(--sans); transition: all 0.15s; margin-left: 4px;
+}
+.btn-jump-sql:hover { background: #d6e4ff; border-color: var(--primary); }
+
+.step-metrics {
+  padding: 0 16px 10px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+}
+.step-duration { font-size: 12px; display: flex; align-items: center; gap: 8px; }
+.step-duration .dur-text { font-family: var(--mono); font-weight: 500; }
+.dur-bar-wrap { width: 100px; height: 6px; background: #f0f0f0; border-radius: 3px; overflow: hidden; }
+.dur-bar { height: 100%; border-radius: 3px; background: var(--primary); transition: width 0.3s; }
+.step-tokens { font-size: 11px; color: var(--text-secondary); font-family: var(--mono); }
+.step-tokens span { margin: 0 2px; }
+.step-tokens .tok-label { font-family: var(--sans); }
+
+/* Expandable content */
+.step-expand { display: none; border-top: 1px solid var(--border); }
+.step-expand.open { display: block; }
+.expand-section { padding: 0; }
+.expand-section-header {
+  padding: 8px 16px; background: #fafafa; border-bottom: 1px solid var(--border);
+  font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.expand-toggle-btn {
+  padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border);
+  background: var(--card-bg); font-size: 10px; cursor: pointer; color: var(--text-secondary);
+  font-family: var(--sans); transition: all 0.15s;
+}
+.expand-toggle-btn:hover { border-color: var(--primary); color: var(--primary); }
+.copy-btn {
+  padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border);
+  background: var(--card-bg); font-size: 11px; cursor: pointer; color: var(--text-secondary);
+  transition: all 0.15s;
+}
+.copy-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+/* Code block styles - GitHub light theme */
+.expand-section-body {
+  max-height: 200px; overflow-y: auto; padding: 0;
+  background: var(--code-bg); color: #24292f; font-family: var(--mono); font-size: 13px;
+  line-height: 1.7; white-space: pre-wrap; word-break: break-all;
+  border-radius: 0 0 6px 6px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.04);
+  transition: max-height 0.3s ease;
+}
+.expand-section-body.expanded {
+  max-height: 400px;
+}
+.expand-section-body.sql-body {
+  background: var(--sql-bg);
+  border-left: 3px solid #3b82f6;
+}
+.expand-section-body.sql-highlight {
+  animation: sqlHighlight 1.5s ease;
+}
+@keyframes sqlHighlight {
+  0% { box-shadow: inset 0 0 0 2px #3b82f6; }
+  100% { box-shadow: inset 0 1px 3px rgba(0,0,0,0.04); }
+}
+
+/* Line numbers wrapper */
+.code-with-lines {
+  display: table; width: 100%; padding: 8px 0;
+}
+.code-line {
+  display: table-row;
+}
+.code-line-num {
+  display: table-cell; text-align: right; padding: 0 10px 0 12px;
+  color: #b0b8c4; user-select: none; width: 1px; white-space: nowrap;
+  font-size: 11px; vertical-align: top;
+}
+.code-line-content {
+  display: table-cell; padding: 0 12px 0 0; white-space: pre-wrap; word-break: break-all;
+}
+
+/* SQL syntax highlighting - light theme */
+.sql-keyword { color: #0550ae; font-weight: 500; }
+.sql-string { color: #0a3069; }
+.sql-number { color: #cf6d1a; }
+.sql-comment { color: #6e7781; font-style: italic; }
+
+.no-selection {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; color: var(--text-secondary); font-size: 14px;
+}
+
+/* ── By Step View ── */
+#byStepView { flex-direction: column; padding: 20px 28px; overflow-y: auto; }
+.bystep-controls {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.bystep-controls label { font-size: 13px; font-weight: 500; }
+.bystep-controls select {
+  padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
+  font-size: 13px; font-family: var(--sans); background: var(--card-bg); cursor: pointer;
+}
+.sort-btns { display: flex; gap: 6px; margin-left: auto; }
+.sort-btn {
+  padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
+  background: var(--card-bg); font-size: 11px; cursor: pointer; font-family: var(--sans);
+  transition: all 0.15s; color: var(--text-secondary);
+}
+.sort-btn:hover, .sort-btn.active { border-color: var(--primary); color: var(--primary); background: #f0f5ff; }
+
+.bystep-table {
+  width: 100%; border-collapse: collapse; background: var(--card-bg);
+  border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
+}
+.bystep-table th {
+  padding: 10px 14px; text-align: left; font-size: 12px; font-weight: 600;
+  background: #fafafa; border-bottom: 1px solid var(--border); color: var(--text-secondary);
+  white-space: nowrap;
+}
+.bystep-table td {
+  padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.bystep-table tr:hover td { background: var(--hover); }
+.bystep-table .q-link {
+  color: var(--primary); cursor: pointer; text-decoration: none;
+  max-width: 320px; display: inline-block;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bystep-table .q-link:hover { text-decoration: underline; }
+.bystep-table .cell-mono { font-family: var(--mono); font-size: 12px; }
+.bystep-table .cell-tokens { font-size: 11px; font-family: var(--mono); white-space: nowrap; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
+.empty-state .empty-icon { font-size: 40px; margin-bottom: 12px; }
+
+/* Confirm dialog */
+.confirm-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4); z-index: 200; display: none;
+  align-items: center; justify-content: center;
+}
+.confirm-overlay.show { display: flex; }
+.confirm-box {
+  background: var(--card-bg); border-radius: 12px; padding: 24px; width: 360px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+}
+.confirm-box h3 { font-size: 15px; margin-bottom: 8px; }
+.confirm-box p { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; }
+.confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.confirm-actions .btn-confirm {
+  background: var(--sql-error); color: #fff; border-color: var(--sql-error);
+}
+.confirm-actions .btn-confirm:hover { opacity: 0.85; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #bfbfbf; }
+
+/* Tooltip */
+[data-tooltip] { position: relative; }
+[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  background: #333; color: #fff; padding: 4px 10px; border-radius: 4px;
+  font-size: 12px; white-space: pre-wrap; max-width: 400px; z-index: 50;
+  pointer-events: none; line-height: 1.5;
+}
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="top-bar">
+  <div class="top-bar-left">
+    <h1><span class="icon">&#x1F50D;</span> NL2SQL Trace Viewer</h1>
+    <div class="summary-stats" id="summaryStats"></div>
+  </div>
+  <div class="top-bar-right">
+    <button class="btn btn-danger" onclick="showClearConfirm()">&#x1F5D1; 清除 Clear</button>
+  </div>
+</div>
+
+<!-- View Tabs -->
+<div class="view-tabs">
+  <div class="view-tab active" data-view="byQuery" onclick="switchView('byQuery')">&#x1F4CB; 按问题 By Query</div>
+  <div class="view-tab" data-view="byStep" onclick="switchView('byStep')">&#x2699;&#xFE0F; 按步骤 By Step</div>
+</div>
+
+<!-- Toolbar / Filter Bar -->
+<div class="toolbar">
+  <label>来源:</label>
+  <select id="sourceFilter" onchange="applyFilters()">
+    <option value="all">全部来源</option>
+    <option value="user">用户查询</option>
+    <option value="recommendation">推荐生成</option>
+    <option value="system">系统调用</option>
+  </select>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+  <!-- By Query View -->
+  <div class="view-container active" id="byQueryView">
+    <div class="left-panel" id="queryList"></div>
+    <div class="right-panel" id="queryDetail">
+      <div class="no-selection">&#x1F448; 选择左侧查询以查看调用链 / Select a query to view pipeline</div>
+    </div>
+  </div>
+
+  <!-- By Step View -->
+  <div class="view-container" id="byStepView">
+    <div class="bystep-controls">
+      <label>步骤类型 Step Type:</label>
+      <select id="stepTypeSelect" onchange="renderByStepView()">
+        <option value="schema_retrieval">Schema Retrieval 模式检索</option>
+        <option value="column_pruning">Column Pruning 列裁剪</option>
+        <option value="sql_generation">SQL Generation SQL生成</option>
+        <option value="sql_dryrun">SQL Dry Run 语法校验</option>
+        <option value="sql_correction">SQL Correction SQL修正</option>
+        <option value="sql_execution">SQL Execution SQL执行</option>
+        <option value="llm_call">LLM Call LLM调用</option>
+      </select>
+      <div class="sort-btns">
+        <button class="sort-btn active" data-sort="timestamp" onclick="setSort('timestamp')">&#x1F552; 时间</button>
+        <button class="sort-btn" data-sort="duration-asc" onclick="setSort('duration-asc')">&#x23F1; 耗时 &#x2191;</button>
+        <button class="sort-btn" data-sort="duration-desc" onclick="setSort('duration-desc')">&#x23F1; 耗时 &#x2193;</button>
+        <button class="sort-btn" data-sort="tokens-desc" onclick="setSort('tokens-desc')">&#x1F4CA; Tokens &#x2193;</button>
+      </div>
+    </div>
+    <div id="byStepContent"></div>
+  </div>
+</div>
+
+<!-- Confirm Dialog -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <h3>&#x26A0;&#xFE0F; 确认清除</h3>
+    <p>将清除所有已记录的查询日志。此操作不可撤销。</p>
+    <div class="confirm-actions">
+      <button class="btn" onclick="hideClearConfirm()">取消 Cancel</button>
+      <button class="btn btn-confirm" onclick="clearAll()">确认清除 Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Status system ──
+const STATUS = {
+  // Level 0: Success
+  success:          { label: '成功',       cls: 'status-success', stepCls: 's-success', color: '#52c41a', icon: '&#x2705;', level: 0 },
+  // Level 1: Warning (completed but with issues)
+  warn_no_result:   { label: '无结果',     cls: 'status-warn',    stepCls: 's-warn',    color: '#faad14', icon: '&#x26A0;&#xFE0F;', level: 1 },
+  warn_corrected:   { label: '已修正',     cls: 'status-warn',    stepCls: 's-warn',    color: '#faad14', icon: '&#x1F527;', level: 1 },
+  warn_misleading:  { label: '非SQL意图',  cls: 'status-warn',    stepCls: 's-warn',    color: '#faad14', icon: '&#x1F4AC;', level: 1 },
+  // Level 2: Error (terminated)
+  error_sql:        { label: 'SQL不可修复', cls: 'status-error',   stepCls: 's-error',   color: '#ff4d4f', icon: '&#x274C;', level: 2 },
+  error_model:      { label: '模型异常',    cls: 'status-error',   stepCls: 's-error',   color: '#ff4d4f', icon: '&#x1F4A5;', level: 2 },
+  error_exec:       { label: '执行崩溃',    cls: 'status-error',   stepCls: 's-error',   color: '#cf1322', icon: '&#x1F480;', level: 2 },
+  error_retrieval:  { label: '检索失败',    cls: 'status-error',   stepCls: 's-error',   color: '#ff4d4f', icon: '&#x1F50D;', level: 2 },
+  error_format:     { label: '格式异常',    cls: 'status-error',   stepCls: 's-error',   color: '#ff4d4f', icon: '&#x1F4CB;', level: 2 },
+  // Legacy compat
+  model_error:      { label: '模型异常',    cls: 'status-model-error', stepCls: 's-model-error', color: '#ff4d4f', icon: '&#x1F4A5;', level: 2 },
+  sql_error:        { label: 'SQL错误',    cls: 'status-sql-error',   stepCls: 's-sql-error',   color: '#ff4d4f', icon: '&#x274C;', level: 2 },
+  no_result:        { label: '无结果',     cls: 'status-no-result',   stepCls: 's-no-result',   color: '#faad14', icon: '&#x26A0;&#xFE0F;', level: 1 },
+  exec_fail:        { label: '执行崩溃',   cls: 'status-exec-fail',   stepCls: 's-exec-fail',   color: '#cf1322', icon: '&#x1F480;', level: 2 },
+};
+
+const SOURCE_LABELS = {
+  user: '用户查询',
+  recommendation: '推荐生成',
+  system: '系统调用',
+};
+const SOURCE_CLS = {
+  user: 'source-tag-user',
+  recommendation: 'source-tag-recommendation',
+  system: 'source-tag-system',
+};
+
+const STEP_NAMES = {
+  schema_retrieval: { zh: '模式检索', en: 'Schema Retrieval' },
+  column_pruning:   { zh: '列裁剪', en: 'Column Pruning' },
+  sql_generation:   { zh: 'SQL生成', en: 'SQL Generation' },
+  sql_dryrun:       { zh: '语法校验', en: 'SQL Dry Run' },
+  sql_correction:   { zh: 'SQL修正', en: 'SQL Correction' },
+  sql_execution:    { zh: 'SQL执行', en: 'SQL Execution' },
+  llm_call:         { zh: 'LLM调用', en: 'LLM Call' },
+};
+
+// ── Mock Data ──
+const queries = [
+  {
+    id: 1, question: '查询华为PE设备的名称、IP地址和所属大区',
+    source: 'user',
+    status: 'success', timestamp: '2026-04-11T14:32:05.120Z', totalDuration: 8420,
+    steps: [
+      {
+        type: 'schema_retrieval', model: 'nomic-embed-text', status: 'success',
+        timestamp: '2026-04-11 14:32:05', duration: 1850,
+        tokens: { prompt: 256, completion: 0, total: 256 },
+        request: 'Embed query: "查询华为PE设备的名称、IP地址和所属大区"\n\nRetrieval parameters:\n  top_k: 10\n  similarity_threshold: 0.65\n  embedding_model: nomic-embed-text-v1.5\n\nCandidate tables: nms_ne_base, nms_ne_ip, nms_region, nms_vendor, nms_device_type, nms_ne_status, nms_link, nms_site, nms_vpn_instance, nms_alarm_current, nms_ne_cpu, nms_ne_memory, nms_traffic_interface, nms_backbone_link',
+        response: 'Retrieved tables (score):\n  1. nms_ne_base (0.92) — 网元基础信息\n  2. nms_ne_ip (0.88) — 网元IP地址\n  3. nms_region (0.85) — 大区信息\n  4. nms_vendor (0.78) — 厂商信息\n  5. nms_device_type (0.72) — 设备类型',
+      },
+      {
+        type: 'column_pruning', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:32:06', duration: 3200,
+        tokens: { prompt: 9800, completion: 620, total: 10420 },
+        request: 'You are a column-pruning agent for a telecom NMS database.\n\nUser question: "查询华为PE设备的名称、IP地址和所属大区"\n\nRetrieved schema:\n\nTABLE nms_ne_base (\n  ne_id VARCHAR PRIMARY KEY,  -- 网元ID\n  ne_name VARCHAR,            -- 网元名称\n  vendor_id VARCHAR,          -- 厂商ID\n  device_type_id VARCHAR,     -- 设备类型ID\n  region_id VARCHAR,          -- 所属大区ID\n  site_id VARCHAR,            -- 站点ID\n  status VARCHAR,             -- 运行状态\n  created_at TIMESTAMP\n)\n\nTABLE nms_ne_ip (\n  ne_id VARCHAR,\n  ip_address VARCHAR,    -- IP地址\n  ip_type VARCHAR,       -- 管理IP/业务IP\n  vrf_name VARCHAR\n)\n\nTABLE nms_region (\n  region_id VARCHAR PRIMARY KEY,\n  region_name VARCHAR,    -- 大区名称\n  region_level VARCHAR    -- 大区层级\n)\n\nTABLE nms_vendor (\n  vendor_id VARCHAR PRIMARY KEY,\n  vendor_name VARCHAR     -- 厂商名称\n)\n\nTABLE nms_device_type (\n  device_type_id VARCHAR PRIMARY KEY,\n  device_type_name VARCHAR,  -- 设备类型名称\n  device_role VARCHAR         -- 设备角色: PE/P/CE/RR\n)\n\nSelect ONLY the columns needed to answer the question. Return JSON.',
+        response: '{\n  "selected_columns": [\n    "nms_ne_base.ne_name",\n    "nms_ne_base.vendor_id",\n    "nms_ne_base.device_type_id",\n    "nms_ne_base.region_id",\n    "nms_ne_ip.ip_address",\n    "nms_region.region_name",\n    "nms_vendor.vendor_name",\n    "nms_device_type.device_role"\n  ],\n  "join_keys": [\n    "nms_ne_base.ne_id = nms_ne_ip.ne_id",\n    "nms_ne_base.region_id = nms_region.region_id",\n    "nms_ne_base.vendor_id = nms_vendor.vendor_id",\n    "nms_ne_base.device_type_id = nms_device_type.device_type_id"\n  ]\n}',
+      },
+      {
+        type: 'sql_generation', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:32:10', duration: 2100,
+        tokens: { prompt: 3200, completion: 280, total: 3480 },
+        request: 'Generate SQL for DuckDB.\n\nQuestion: "查询华为PE设备的名称、IP地址和所属大区"\n\nAvailable columns:\n  nms_ne_base: ne_name, vendor_id, device_type_id, region_id\n  nms_ne_ip: ip_address\n  nms_region: region_name\n  nms_vendor: vendor_name\n  nms_device_type: device_role\n\nJoin conditions:\n  nms_ne_base.ne_id = nms_ne_ip.ne_id\n  nms_ne_base.region_id = nms_region.region_id\n  nms_ne_base.vendor_id = nms_vendor.vendor_id\n  nms_ne_base.device_type_id = nms_device_type.device_type_id\n\nRules: Use proper JOIN syntax, return only needed columns.',
+        response: 'SELECT\n  nb.ne_name AS 设备名称,\n  ni.ip_address AS IP地址,\n  r.region_name AS 所属大区\nFROM nms_ne_base nb\nJOIN nms_ne_ip ni ON nb.ne_id = ni.ne_id\nJOIN nms_region r ON nb.region_id = r.region_id\nJOIN nms_vendor v ON nb.vendor_id = v.vendor_id\nJOIN nms_device_type dt ON nb.device_type_id = dt.device_type_id\nWHERE v.vendor_name = \'华为\'\n  AND dt.device_role = \'PE\'',
+        sql: "SELECT\n  nb.ne_name AS 设备名称,\n  ni.ip_address AS IP地址,\n  r.region_name AS 所属大区\nFROM nms_ne_base nb\nJOIN nms_ne_ip ni ON nb.ne_id = ni.ne_id\nJOIN nms_region r ON nb.region_id = r.region_id\nJOIN nms_vendor v ON nb.vendor_id = v.vendor_id\nJOIN nms_device_type dt ON nb.device_type_id = dt.device_type_id\nWHERE v.vendor_name = '华为'\n  AND dt.device_role = 'PE'",
+      },
+      {
+        type: 'sql_dryrun', model: 'wren-engine', status: 'success',
+        timestamp: '2026-04-11 14:32:12', duration: 85,
+        tokens: null,
+        request: "DRY RUN SQL:\nSELECT nb.ne_name AS 设备名称, ni.ip_address AS IP地址, r.region_name AS 所属大区\nFROM nms_ne_base nb\nJOIN nms_ne_ip ni ON nb.ne_id = ni.ne_id\nJOIN nms_region r ON nb.region_id = r.region_id\nJOIN nms_vendor v ON nb.vendor_id = v.vendor_id\nJOIN nms_device_type dt ON nb.device_type_id = dt.device_type_id\nWHERE v.vendor_name = '华为' AND dt.device_role = 'PE'",
+        response: 'Dry run passed. Query plan validated successfully.\nEstimated cost: 0.42\nTables accessed: nms_ne_base, nms_ne_ip, nms_region, nms_vendor, nms_device_type',
+      },
+      {
+        type: 'sql_execution', model: 'duckdb', status: 'success',
+        timestamp: '2026-04-11 14:32:12', duration: 45,
+        tokens: null,
+        request: "EXECUTE SQL on DuckDB",
+        response: 'Query executed successfully.\nRows returned: 37\nExecution time: 45ms\nColumns: 设备名称, IP地址, 所属大区',
+        rowCount: 37,
+      },
+    ],
+  },
+  {
+    id: 2, question: '统计每个大区TIER1站点数量，按数量降序排列',
+    source: 'user',
+    status: 'success', timestamp: '2026-04-11T14:33:12.500Z', totalDuration: 6580,
+    steps: [
+      {
+        type: 'schema_retrieval', model: 'nomic-embed-text', status: 'success',
+        timestamp: '2026-04-11 14:33:12', duration: 1200,
+        tokens: { prompt: 256, completion: 0, total: 256 },
+        request: 'Embed query: "统计每个大区TIER1站点数量，按数量降序排列"\n\nRetrieval parameters:\n  top_k: 10\n  similarity_threshold: 0.65\n  embedding_model: nomic-embed-text-v1.5',
+        response: 'Retrieved tables (score):\n  1. nms_site (0.94) — 站点信息\n  2. nms_region (0.91) — 大区信息\n  3. nms_ne_base (0.62) — below threshold, excluded',
+      },
+      {
+        type: 'column_pruning', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:33:13', duration: 2800,
+        tokens: { prompt: 8200, completion: 480, total: 8680 },
+        request: 'You are a column-pruning agent.\n\nQuestion: "统计每个大区TIER1站点数量，按数量降序排列"\n\nRetrieved schema:\n\nTABLE nms_site (\n  site_id VARCHAR PRIMARY KEY,\n  site_name VARCHAR,\n  site_tier VARCHAR,    -- 站点等级: TIER1/TIER2/TIER3\n  region_id VARCHAR,\n  address VARCHAR,\n  longitude DOUBLE,\n  latitude DOUBLE\n)\n\nTABLE nms_region (\n  region_id VARCHAR PRIMARY KEY,\n  region_name VARCHAR,\n  region_level VARCHAR\n)\n\nSelect ONLY needed columns.',
+        response: '{\n  "selected_columns": [\n    "nms_site.site_tier",\n    "nms_site.region_id",\n    "nms_region.region_name"\n  ],\n  "join_keys": [\n    "nms_site.region_id = nms_region.region_id"\n  ]\n}',
+      },
+      {
+        type: 'sql_generation', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:33:16', duration: 1800,
+        tokens: { prompt: 2400, completion: 180, total: 2580 },
+        request: 'Generate SQL.\nQuestion: "统计每个大区TIER1站点数量，按数量降序排列"\nColumns: nms_site.site_tier, nms_site.region_id, nms_region.region_name\nJoin: nms_site.region_id = nms_region.region_id',
+        response: "SELECT\n  r.region_name AS 大区,\n  COUNT(*) AS TIER1站点数\nFROM nms_site s\nJOIN nms_region r ON s.region_id = r.region_id\nWHERE s.site_tier = 'TIER1'\nGROUP BY r.region_name\nORDER BY TIER1站点数 DESC",
+        sql: "SELECT\n  r.region_name AS 大区,\n  COUNT(*) AS TIER1站点数\nFROM nms_site s\nJOIN nms_region r ON s.region_id = r.region_id\nWHERE s.site_tier = 'TIER1'\nGROUP BY r.region_name\nORDER BY TIER1站点数 DESC",
+      },
+      {
+        type: 'sql_dryrun', model: 'wren-engine', status: 'success',
+        timestamp: '2026-04-11 14:33:18', duration: 70,
+        tokens: null,
+        request: "DRY RUN SQL:\nSELECT r.region_name AS 大区, COUNT(*) AS TIER1站点数\nFROM nms_site s\nJOIN nms_region r ON s.region_id = r.region_id\nWHERE s.site_tier = 'TIER1'\nGROUP BY r.region_name\nORDER BY TIER1站点数 DESC",
+        response: 'Dry run passed.\nEstimated cost: 0.18',
+      },
+      {
+        type: 'sql_execution', model: 'duckdb', status: 'success',
+        timestamp: '2026-04-11 14:33:18', duration: 32,
+        tokens: null,
+        request: "EXECUTE SQL on DuckDB",
+        response: 'Query executed successfully.\nRows returned: 8\nExecution time: 32ms',
+        rowCount: 8,
+      },
+    ],
+  },
+  {
+    id: 3, question: '查询过去24小时CPU利用率超过80%的网元及其告警信息',
+    source: 'user',
+    status: 'warn_no_result', timestamp: '2026-04-11T14:35:22.000Z', totalDuration: 9100,
+    steps: [
+      {
+        type: 'schema_retrieval', model: 'nomic-embed-text', status: 'success',
+        timestamp: '2026-04-11 14:35:22', duration: 2100,
+        tokens: { prompt: 256, completion: 0, total: 256 },
+        request: 'Embed query: "查询过去24小时CPU利用率超过80%的网元及其告警信息"\n\nRetrieval parameters:\n  top_k: 10\n  similarity_threshold: 0.65',
+        response: 'Retrieved tables:\n  1. nms_ne_cpu (0.95)\n  2. nms_alarm_current (0.90)\n  3. nms_ne_base (0.87)\n  4. nms_ne_status (0.72)',
+      },
+      {
+        type: 'column_pruning', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:35:24', duration: 3400,
+        tokens: { prompt: 11200, completion: 720, total: 11920 },
+        request: 'Column pruning for question: "查询过去24小时CPU利用率超过80%的网元及其告警信息"\n\nSchema includes nms_ne_cpu, nms_alarm_current, nms_ne_base, nms_ne_status with full column definitions...',
+        response: '{\n  "selected_columns": [\n    "nms_ne_base.ne_name",\n    "nms_ne_cpu.cpu_utilization",\n    "nms_ne_cpu.collect_time",\n    "nms_alarm_current.alarm_title",\n    "nms_alarm_current.alarm_level",\n    "nms_alarm_current.alarm_time"\n  ],\n  "join_keys": [\n    "nms_ne_cpu.ne_id = nms_ne_base.ne_id",\n    "nms_alarm_current.ne_id = nms_ne_base.ne_id"\n  ]\n}',
+      },
+      {
+        type: 'sql_generation', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:35:27', duration: 2600,
+        tokens: { prompt: 3800, completion: 350, total: 4150 },
+        request: 'Generate SQL for: "查询过去24小时CPU利用率超过80%的网元及其告警信息"',
+        response: "SELECT\n  nb.ne_name AS 网元名称,\n  nc.cpu_utilization AS CPU利用率,\n  nc.collect_time AS 采集时间,\n  ac.alarm_title AS 告警标题,\n  ac.alarm_level AS 告警级别,\n  ac.alarm_time AS 告警时间\nFROM nms_ne_cpu nc\nJOIN nms_ne_base nb ON nc.ne_id = nb.ne_id\nLEFT JOIN nms_alarm_current ac ON nb.ne_id = ac.ne_id\nWHERE nc.cpu_utilization > 80\n  AND nc.collect_time >= NOW() - INTERVAL '24 hours'\nORDER BY nc.cpu_utilization DESC",
+        sql: "SELECT\n  nb.ne_name AS 网元名称,\n  nc.cpu_utilization AS CPU利用率,\n  nc.collect_time AS 采集时间,\n  ac.alarm_title AS 告警标题,\n  ac.alarm_level AS 告警级别,\n  ac.alarm_time AS 告警时间\nFROM nms_ne_cpu nc\nJOIN nms_ne_base nb ON nc.ne_id = nb.ne_id\nLEFT JOIN nms_alarm_current ac ON nb.ne_id = ac.ne_id\nWHERE nc.cpu_utilization > 80\n  AND nc.collect_time >= NOW() - INTERVAL '24 hours'\nORDER BY nc.cpu_utilization DESC",
+      },
+      {
+        type: 'sql_dryrun', model: 'wren-engine', status: 'success',
+        timestamp: '2026-04-11 14:35:30', duration: 92,
+        tokens: null,
+        request: "DRY RUN SQL (validated against schema)",
+        response: 'Dry run passed.\nQuery plan validated.\nEstimated cost: 1.24',
+      },
+      {
+        type: 'sql_execution', model: 'duckdb', status: 'no_result',
+        timestamp: '2026-04-11 14:35:30', duration: 38,
+        tokens: null,
+        request: "EXECUTE SQL on DuckDB",
+        response: 'Query executed successfully.\nRows returned: 0\nExecution time: 38ms\n\nNote: No network elements with CPU > 80% in the last 24 hours.',
+        rowCount: 0,
+      },
+    ],
+  },
+  {
+    id: 4, question: '找出承载单点故障风险的骨干链路（即两端网元之间仅有一条链路）',
+    source: 'user',
+    status: 'warn_corrected', timestamp: '2026-04-11T14:37:45.300Z', totalDuration: 14200,
+    steps: [
+      {
+        type: 'schema_retrieval', model: 'nomic-embed-text', status: 'success',
+        timestamp: '2026-04-11 14:37:45', duration: 1600,
+        tokens: { prompt: 256, completion: 0, total: 256 },
+        request: 'Embed query: "找出承载单点故障风险的骨干链路"\n\nRetrieval parameters:\n  top_k: 10',
+        response: 'Retrieved tables:\n  1. nms_backbone_link (0.96)\n  2. nms_link (0.89)\n  3. nms_ne_base (0.82)',
+      },
+      {
+        type: 'column_pruning', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:37:46', duration: 2900,
+        tokens: { prompt: 9500, completion: 550, total: 10050 },
+        request: 'Column pruning for: "找出承载单点故障风险的骨干链路（两端网元之间仅有一条链路）"\n\nSchema: nms_backbone_link, nms_link, nms_ne_base...',
+        response: '{\n  "selected_columns": [\n    "nms_backbone_link.link_id",\n    "nms_backbone_link.source_ne_id",\n    "nms_backbone_link.target_ne_id",\n    "nms_backbone_link.bandwidth",\n    "nms_ne_base.ne_name"\n  ]\n}',
+      },
+      {
+        type: 'sql_generation', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:37:49', duration: 3500,
+        tokens: { prompt: 3600, completion: 420, total: 4020 },
+        request: 'Generate SQL for: "找出承载单点故障风险的骨干链路（即两端网元之间仅有一条链路）"',
+        response: "SELECT\n  bl.link_id,\n  src.ne_name AS 源端网元,\n  tgt.ne_name AS 目的网元,\n  bl.bandwidth AS 带宽\nFROM nms_backbone_link bl\nJOIN nms_ne_base src ON bl.source_ne_id = src.ne_id\nJOIN nms_ne_base tgt ON bl.target_ne_id = tgt.ne_id\nWHERE (bl.source_ne_id, bl.target_ne_id) IN (\n  SELECT LEAST(source_ne_id, target_ne_id), GREATEST(source_ne_id, target_ne_id)\n  FROM nms_backbone_link\n  GROUP BY LEAST(source_ne_id, target_ne_id), GREATEST(source_ne_id, target_ne_id)\n  HAVING COUNT(*) = 1\n)\nORDER BY bl.bandwidth DESC",
+        sql: "SELECT\n  bl.link_id,\n  src.ne_name AS 源端网元,\n  tgt.ne_name AS 目的网元,\n  bl.bandwidth AS 带宽\nFROM nms_backbone_link bl\nJOIN nms_ne_base src ON bl.source_ne_id = src.ne_id\nJOIN nms_ne_base tgt ON bl.target_ne_id = tgt.ne_id\nWHERE (bl.source_ne_id, bl.target_ne_id) IN (\n  SELECT LEAST(source_ne_id, target_ne_id), GREATEST(source_ne_id, target_ne_id)\n  FROM nms_backbone_link\n  GROUP BY LEAST(source_ne_id, target_ne_id), GREATEST(source_ne_id, target_ne_id)\n  HAVING COUNT(*) = 1\n)\nORDER BY bl.bandwidth DESC",
+      },
+      {
+        type: 'sql_dryrun', model: 'wren-engine', status: 'sql_error',
+        timestamp: '2026-04-11 14:37:53', duration: 110,
+        tokens: null,
+        request: "DRY RUN SQL:\nSELECT bl.link_id, src.ne_name AS 源端网元, tgt.ne_name AS 目的网元, bl.bandwidth AS 带宽\nFROM nms_backbone_link bl\nJOIN nms_ne_base src ON bl.source_ne_id = src.ne_id\nJOIN nms_ne_base tgt ON bl.target_ne_id = tgt.ne_id\nWHERE (bl.source_ne_id, bl.target_ne_id) IN (\n  SELECT LEAST(source_ne_id, target_ne_id), GREATEST(source_ne_id, target_ne_id)\n  FROM nms_backbone_link\n  GROUP BY LEAST(source_ne_id, target_ne_id), GREATEST(source_ne_id, target_ne_id)\n  HAVING COUNT(*) = 1\n)",
+        response: 'ERROR: Binder Error: Cannot compare values of type VARCHAR with IN clause containing tuples.\nHint: Row-value comparisons with IN subquery are not supported in DuckDB.\nLine 8, Column 7.',
+      },
+      {
+        type: 'sql_correction', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:37:53', duration: 4200,
+        tokens: { prompt: 4800, completion: 380, total: 5180 },
+        request: 'The following SQL failed dry run. Fix it.\n\nOriginal SQL:\nSELECT bl.link_id, src.ne_name AS 源端网元, tgt.ne_name AS 目的网元, bl.bandwidth AS 带宽\nFROM nms_backbone_link bl\nJOIN nms_ne_base src ON bl.source_ne_id = src.ne_id\nJOIN nms_ne_base tgt ON bl.target_ne_id = tgt.ne_id\nWHERE (bl.source_ne_id, bl.target_ne_id) IN (\n  SELECT LEAST(source_ne_id, target_ne_id), GREATEST(source_ne_id, target_ne_id)\n  FROM nms_backbone_link\n  GROUP BY LEAST(source_ne_id, target_ne_id), GREATEST(source_ne_id, target_ne_id)\n  HAVING COUNT(*) = 1\n)\n\nError: Binder Error: Cannot compare values of type VARCHAR with IN clause containing tuples.\nHint: Row-value comparisons with IN subquery are not supported in DuckDB.\n\nFix: Replace tuple IN subquery with CTE + JOIN pattern for DuckDB compatibility.',
+        response: "-- Fix: Replaced tuple IN subquery with CTE + JOIN (DuckDB does not support row-value IN subquery)\n-- Changed: WHERE (col1, col2) IN (SELECT ...) → WITH cte AS (...) JOIN cte ON ...\n\nWITH pair_counts AS (\n  SELECT\n    LEAST(source_ne_id, target_ne_id) AS ne_a,\n    GREATEST(source_ne_id, target_ne_id) AS ne_b,\n    COUNT(*) AS link_count\n  FROM nms_backbone_link\n  GROUP BY ne_a, ne_b\n  HAVING COUNT(*) = 1\n)\nSELECT\n  bl.link_id,\n  src.ne_name AS 源端网元,\n  tgt.ne_name AS 目的网元,\n  bl.bandwidth AS 带宽\nFROM nms_backbone_link bl\nJOIN pair_counts pc\n  ON LEAST(bl.source_ne_id, bl.target_ne_id) = pc.ne_a\n  AND GREATEST(bl.source_ne_id, bl.target_ne_id) = pc.ne_b\nJOIN nms_ne_base src ON bl.source_ne_id = src.ne_id\nJOIN nms_ne_base tgt ON bl.target_ne_id = tgt.ne_id\nORDER BY bl.bandwidth DESC",
+        sql: "WITH pair_counts AS (\n  SELECT\n    LEAST(source_ne_id, target_ne_id) AS ne_a,\n    GREATEST(source_ne_id, target_ne_id) AS ne_b,\n    COUNT(*) AS link_count\n  FROM nms_backbone_link\n  GROUP BY ne_a, ne_b\n  HAVING COUNT(*) = 1\n)\nSELECT\n  bl.link_id,\n  src.ne_name AS 源端网元,\n  tgt.ne_name AS 目的网元,\n  bl.bandwidth AS 带宽\nFROM nms_backbone_link bl\nJOIN pair_counts pc\n  ON LEAST(bl.source_ne_id, bl.target_ne_id) = pc.ne_a\n  AND GREATEST(bl.source_ne_id, bl.target_ne_id) = pc.ne_b\nJOIN nms_ne_base src ON bl.source_ne_id = src.ne_id\nJOIN nms_ne_base tgt ON bl.target_ne_id = tgt.ne_id\nORDER BY bl.bandwidth DESC",
+      },
+      {
+        type: 'sql_dryrun', model: 'wren-engine', status: 'success',
+        timestamp: '2026-04-11 14:37:57', duration: 95,
+        tokens: null,
+        request: "DRY RUN corrected SQL (attempt 2)",
+        response: 'Dry run passed.\nQuery plan validated.\nEstimated cost: 0.89',
+      },
+      {
+        type: 'sql_execution', model: 'duckdb', status: 'success',
+        timestamp: '2026-04-11 14:37:57', duration: 62,
+        tokens: null,
+        request: "EXECUTE corrected SQL on DuckDB",
+        response: 'Query executed successfully.\nRows returned: 12\nExecution time: 62ms',
+        rowCount: 12,
+      },
+    ],
+  },
+  {
+    id: 5, question: '计算每条VPN实例的健康评分（基于链路利用率、告警数、时延）',
+    source: 'recommendation',
+    status: 'error_model', timestamp: '2026-04-11T14:40:01.800Z', totalDuration: 35200,
+    steps: [
+      {
+        type: 'schema_retrieval', model: 'nomic-embed-text', status: 'success',
+        timestamp: '2026-04-11 14:40:01', duration: 1900,
+        tokens: { prompt: 256, completion: 0, total: 256 },
+        request: 'Embed query: "计算每条VPN实例的健康评分（基于链路利用率、告警数、时延）"\n\nRetrieval parameters:\n  top_k: 10',
+        response: 'Retrieved tables:\n  1. nms_vpn_instance (0.93)\n  2. nms_traffic_interface (0.88)\n  3. nms_alarm_current (0.85)\n  4. nms_link (0.80)\n  5. nms_backbone_link (0.74)',
+      },
+      {
+        type: 'column_pruning', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:40:03', duration: 3800,
+        tokens: { prompt: 12000, completion: 780, total: 12780 },
+        request: 'Column pruning for: "计算每条VPN实例的健康评分（基于链路利用率、告警数、时延）"\n\nSchema includes 5 tables with full column definitions for VPN health scoring...',
+        response: '{\n  "selected_columns": [\n    "nms_vpn_instance.vpn_name",\n    "nms_vpn_instance.vpn_id",\n    "nms_traffic_interface.utilization_in",\n    "nms_traffic_interface.utilization_out",\n    "nms_alarm_current.alarm_level",\n    "nms_link.latency_ms"\n  ]\n}',
+      },
+      {
+        type: 'sql_generation', model: 'gemini-2.5-flash', status: 'model_error',
+        timestamp: '2026-04-11 14:40:07', duration: 30100,
+        tokens: { prompt: 4200, completion: 0, total: 4200 },
+        request: 'Generate SQL for: "计算每条VPN实例的健康评分（基于链路利用率、告警数、时延）"\n\nThis is a complex analytical query requiring:\n  - Aggregation across multiple tables\n  - Custom scoring formula\n  - VPN-level grouping',
+        response: 'ERROR: Request timeout after 30s.\ngemini-2.5-flash API returned: 503 Service Unavailable\n\nRetry-After: 60\nX-RateLimit-Remaining: 0\nX-RateLimit-Reset: 1744382467',
+      },
+    ],
+  },
+  {
+    id: 6, question: '语义描述生成',
+    source: 'system',
+    status: 'success', timestamp: '2026-04-11T14:41:30.000Z', totalDuration: 2450,
+    steps: [
+      {
+        type: 'llm_call', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:41:30', duration: 2200,
+        tokens: { prompt: 1800, completion: 640, total: 2440 },
+        request: 'Generate semantic descriptions for the following tables and columns.\n\nInput:\n  Table: nms_ne_base\n  Columns: ne_id, ne_name, vendor_id, device_type_id, region_id, site_id, status, created_at\n\nFor each column, produce a one-line Chinese description suitable for MDL semantic layer.',
+        response: '{\n  "nms_ne_base": "网元基础信息表，记录所有网络设备的核心属性",\n  "columns": {\n    "ne_id": "网元唯一标识符，主键",\n    "ne_name": "网元名称，通常包含设备型号和位置信息",\n    "vendor_id": "所属厂商ID，关联nms_vendor表",\n    "device_type_id": "设备类型ID，关联nms_device_type表",\n    "region_id": "所属大区ID，关联nms_region表",\n    "site_id": "所属站点ID，关联nms_site表",\n    "status": "设备运行状态: active/inactive/maintenance",\n    "created_at": "记录创建时间"\n  }\n}',
+      },
+      {
+        type: 'llm_call', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:41:32', duration: 250,
+        tokens: { prompt: 200, completion: 80, total: 280 },
+        request: 'Validate generated descriptions: check for completeness and consistency.',
+        response: 'Validation passed.\n  - All 8 columns described\n  - Foreign key references consistent\n  - No missing descriptions',
+      },
+    ],
+  },
+  {
+    id: 7, question: '统计每个VRF的EVPN路由收敛时间分布',
+    source: 'user',
+    status: 'error_sql', timestamp: '2026-04-11T14:43:10.500Z', totalDuration: 18900,
+    steps: [
+      {
+        type: 'schema_retrieval', model: 'nomic-embed-text', status: 'success',
+        timestamp: '2026-04-11 14:43:10', duration: 1800,
+        tokens: { prompt: 256, completion: 0, total: 256 },
+        request: 'Embed query: "统计每个VRF的EVPN路由收敛时间分布"\n\nRetrieval parameters:\n  top_k: 10\n  similarity_threshold: 0.65',
+        response: 'Retrieved tables:\n  1. nms_vpn_instance (0.82)\n  2. nms_ne_base (0.68)\n  3. nms_link (0.65)\n\nNote: No EVPN or route convergence tables found in schema. Best-effort retrieval with low confidence.',
+      },
+      {
+        type: 'column_pruning', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:43:12', duration: 2800,
+        tokens: { prompt: 8600, completion: 420, total: 9020 },
+        request: 'Column pruning for: "统计每个VRF的EVPN路由收敛时间分布"\n\nRetrieved schema:\n  nms_vpn_instance: vpn_id, vpn_name, vrf_name, ne_id, rd, rt_import, rt_export\n  nms_ne_base: ne_id, ne_name, vendor_id, ...\n  nms_link: link_id, source_ne_id, target_ne_id, latency_ms, ...',
+        response: '{\n  "selected_columns": [\n    "nms_vpn_instance.vrf_name",\n    "nms_vpn_instance.vpn_name",\n    "nms_link.latency_ms",\n    "nms_ne_base.ne_name"\n  ],\n  "join_keys": [\n    "nms_vpn_instance.ne_id = nms_ne_base.ne_id",\n    "nms_ne_base.ne_id = nms_link.source_ne_id"\n  ],\n  "warning": "No EVPN route convergence data in retrieved schema. Using link latency as proxy."\n}',
+      },
+      {
+        type: 'sql_generation', model: 'gemini-2.5-flash', status: 'success',
+        timestamp: '2026-04-11 14:43:15', duration: 3200,
+        tokens: { prompt: 3400, completion: 380, total: 3780 },
+        request: 'Generate SQL for: "统计每个VRF的EVPN路由收敛时间分布"\n\nWarning from column pruning: No EVPN route convergence data available. Using link latency as proxy.',
+        response: "SELECT\n  vi.vrf_name AS VRF名称,\n  COUNT(DISTINCT l.link_id) AS 关联链路数,\n  ROUND(AVG(l.latency_ms), 2) AS 平均时延ms,\n  ROUND(MIN(l.latency_ms), 2) AS 最小时延ms,\n  ROUND(MAX(l.latency_ms), 2) AS 最大时延ms,\n  ROUND(STDDEV(l.latency_ms), 2) AS 时延标准差\nFROM nms_vpn_instance vi\nJOIN nms_ne_base nb ON vi.ne_id = nb.ne_id\nJOIN nms_link l ON nb.ne_id = l.source_ne_id\nGROUP BY vi.vrf_name\nORDER BY 平均时延ms DESC",
+        sql: "SELECT\n  vi.vrf_name AS VRF名称,\n  COUNT(DISTINCT l.link_id) AS 关联链路数,\n  ROUND(AVG(l.latency_ms), 2) AS 平均时延ms,\n  ROUND(MIN(l.latency_ms), 2) AS 最小时延ms,\n  ROUND(MAX(l.latency_ms), 2) AS 最大时延ms,\n  ROUND(STDDEV(l.latency_ms), 2) AS 时延标准差\nFROM nms_vpn_instance vi\nJOIN nms_ne_base nb ON vi.ne_id = nb.ne_id\nJOIN nms_link l ON nb.ne_id = l.source_ne_id\nGROUP BY vi.vrf_name\nORDER BY 平均时延ms DESC",
+      },
+      {
+        type: 'sql_dryrun', model: 'wren-engine', status: 'sql_error',
+        timestamp: '2026-04-11 14:43:18', duration: 95,
+        tokens: null,
+        request: "DRY RUN SQL:\nSELECT vi.vrf_name AS VRF名称, COUNT(DISTINCT l.link_id) AS 关联链路数,\n  ROUND(AVG(l.latency_ms), 2) AS 平均时延ms, ...\nFROM nms_vpn_instance vi\nJOIN nms_ne_base nb ON vi.ne_id = nb.ne_id\nJOIN nms_link l ON nb.ne_id = l.source_ne_id\nGROUP BY vi.vrf_name",
+        response: 'ERROR: Catalog Error: Table "nms_link" does not have a column named "latency_ms".\nAvailable columns: link_id, source_ne_id, target_ne_id, link_type, bandwidth, status\n\nThe schema does not contain latency or convergence timing data.',
+      },
+      {
+        type: 'sql_correction', model: 'gemini-2.5-flash', status: 'sql_error',
+        timestamp: '2026-04-11 14:43:19', duration: 4800,
+        tokens: { prompt: 5200, completion: 460, total: 5660 },
+        request: 'The following SQL failed dry run. Fix it.\n\nOriginal SQL: ... (uses nms_link.latency_ms)\n\nError: Catalog Error: Table "nms_link" does not have a column named "latency_ms".\nAvailable columns: link_id, source_ne_id, target_ne_id, link_type, bandwidth, status\n\nThe user question asks about EVPN route convergence timing, but no such data exists in the schema.\nAttempt to fix with available columns.',
+        response: "-- Attempted fix: replace latency_ms with bandwidth as proxy metric\n-- However, bandwidth is NOT a time-based metric and cannot represent convergence timing\n\nSELECT\n  vi.vrf_name AS VRF名称,\n  COUNT(DISTINCT l.link_id) AS 关联链路数,\n  ROUND(AVG(l.bandwidth), 2) AS 平均带宽\nFROM nms_vpn_instance vi\nJOIN nms_ne_base nb ON vi.ne_id = nb.ne_id\nJOIN nms_link l ON nb.ne_id = l.source_ne_id\nGROUP BY vi.vrf_name\nORDER BY 平均带宽 DESC",
+        sql: "SELECT\n  vi.vrf_name AS VRF名称,\n  COUNT(DISTINCT l.link_id) AS 关联链路数,\n  ROUND(AVG(l.bandwidth), 2) AS 平均带宽\nFROM nms_vpn_instance vi\nJOIN nms_ne_base nb ON vi.ne_id = nb.ne_id\nJOIN nms_link l ON nb.ne_id = l.source_ne_id\nGROUP BY vi.vrf_name\nORDER BY 平均带宽 DESC",
+      },
+      {
+        type: 'sql_dryrun', model: 'wren-engine', status: 'sql_error',
+        timestamp: '2026-04-11 14:43:24', duration: 88,
+        tokens: null,
+        request: "DRY RUN corrected SQL (attempt 2):\nSELECT vi.vrf_name AS VRF名称, COUNT(DISTINCT l.link_id) AS 关联链路数,\n  ROUND(AVG(l.bandwidth), 2) AS 平均带宽\nFROM nms_vpn_instance vi\nJOIN nms_ne_base nb ON vi.ne_id = nb.ne_id\nJOIN nms_link l ON nb.ne_id = l.source_ne_id\nGROUP BY vi.vrf_name",
+        response: 'ERROR: Binder Error: column "bandwidth" must appear in the GROUP BY clause or be used in an aggregate function.\n\nFundamental issue: The schema lacks EVPN route convergence timing data entirely. No column in any available table can meaningfully represent route convergence time distribution. This query cannot be answered with the current schema.',
+      },
+    ],
+  },
+];
+
+// ── State ──
+let selectedQueryId = null;
+let currentView = 'byQuery';
+let currentSort = 'timestamp';
+let currentSourceFilter = 'all';
+let allStepsExpanded = false;
+
+// ── Filtered queries ──
+function getFilteredQueries() {
+  if (currentSourceFilter === 'all') return queries;
+  return queries.filter(q => q.source === currentSourceFilter);
+}
+
+function applyFilters() {
+  currentSourceFilter = document.getElementById('sourceFilter').value;
+  renderAll();
+}
+
+// ── Source tag HTML helper ──
+function sourceTagHtml(source) {
+  const label = SOURCE_LABELS[source] || source;
+  const cls = SOURCE_CLS[source] || 'source-tag-system';
+  return `<span class="source-tag ${cls}">${label}</span>`;
+}
+
+// ── Render Functions ──
+function renderSummary() {
+  const total = queries.length;
+  let cntSuccess = 0, cntWarn = 0, cntError = 0;
+  let cntUser = 0, cntRec = 0, cntSys = 0;
+  let totalTokens = { prompt: 0, completion: 0, total: 0 };
+  let totalDur = 0;
+  let maxDur = 0;
+
+  queries.forEach(q => {
+    const s = STATUS[q.status] || STATUS.success;
+    if (s.level === 0) cntSuccess++;
+    else if (s.level === 1) cntWarn++;
+    else cntError++;
+    if (q.source === 'user') cntUser++;
+    else if (q.source === 'recommendation') cntRec++;
+    else if (q.source === 'system') cntSys++;
+    totalDur += q.totalDuration;
+    if (q.totalDuration > maxDur) maxDur = q.totalDuration;
+    q.steps.forEach(s => {
+      if (s.tokens) {
+        totalTokens.prompt += s.tokens.prompt;
+        totalTokens.completion += s.tokens.completion;
+        totalTokens.total += s.tokens.total;
+      }
+    });
+  });
+
+  const avgDur = total > 0 ? (totalDur / total / 1000).toFixed(1) : '0';
+  const maxDurText = (maxDur / 1000).toFixed(1);
+  const sourceTooltip = `用户查询: ${cntUser}\n推荐生成: ${cntRec}\n系统调用: ${cntSys}`;
+
+  document.getElementById('summaryStats').innerHTML = `
+    <div class="stat-item" data-tooltip="${sourceTooltip}">查询 <span class="stat-value">${total}</span></div>
+    <div class="stat-item">&#x2705; 成功 <span class="stat-value sv-success">${cntSuccess}</span></div>
+    <div class="stat-item">&#x26A0;&#xFE0F; 告警 <span class="stat-value" style="color:#faad14">${cntWarn}</span></div>
+    <div class="stat-item">&#x274C; 错误 <span class="stat-value sv-sql-err">${cntError}</span></div>
+    <div class="stat-item">Tokens <span class="stat-value">${fmtNum(totalTokens.total)}</span>
+      <span style="font-size:10px;color:var(--text-secondary)">(P:${fmtNum(totalTokens.prompt)} C:${fmtNum(totalTokens.completion)})</span>
+    </div>
+    <div class="stat-item">平均耗时 <span class="stat-value">${avgDur}s</span></div>
+    <div class="stat-item">最慢 <span class="stat-value" style="color:#cf1322">${maxDurText}s</span></div>
+  `;
+}
+
+function renderQueryList() {
+  const el = document.getElementById('queryList');
+  const filtered = getFilteredQueries();
+  const maxDur = Math.max(...queries.map(q => q.totalDuration), 1);
+
+  el.innerHTML = filtered.map(q => {
+    const s = STATUS[q.status];
+    const dur = (q.totalDuration / 1000).toFixed(1);
+    const durPct = Math.max(4, (q.totalDuration / maxDur) * 100);
+    return `
+      <div class="query-item ${q.id === selectedQueryId ? 'active' : ''}" onclick="selectQuery(${q.id})">
+        <div class="q-index">#${q.id} ${sourceTagHtml(q.source)}</div>
+        <div class="q-text">${esc(q.question)}</div>
+        <div class="q-meta">
+          <span class="status-badge ${s.cls}"><span class="status-dot"></span>${s.label}</span>
+          <span class="q-time">${dur}s</span>
+          <div class="q-dur-bar-wrap"><div class="q-dur-bar" style="width:${durPct}%"></div></div>
+          <span class="q-time">${q.timestamp.slice(0, 10)} ${q.timestamp.slice(11, 19)}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function selectQuery(id) {
+  selectedQueryId = id;
+  allStepsExpanded = false;
+  if (currentView !== 'byQuery') switchView('byQuery');
+  renderQueryList();
+  renderTimeline();
+}
+
+function renderTimeline() {
+  const el = document.getElementById('queryDetail');
+  const q = queries.find(x => x.id === selectedQueryId);
+  if (!q) {
+    el.innerHTML = '<div class="no-selection">&#x1F448; 选择左侧查询以查看调用链 / Select a query to view pipeline</div>';
+    return;
+  }
+
+  const s = STATUS[q.status];
+  const dur = (q.totalDuration / 1000).toFixed(1);
+  const maxDur = Math.max(...q.steps.map(st => st.duration));
+
+  let html = `
+    <div class="timeline-header">
+      <div class="th-question">${sourceTagHtml(q.source)} ${esc(q.question)}</div>
+      <div class="th-meta">
+        <span class="status-badge ${s.cls}"><span class="status-dot"></span>${s.label}</span>
+        <span>总耗时 ${dur}s</span>
+        <span>${q.timestamp.slice(0, 10)} ${q.timestamp.slice(11, 19)}</span>
+      </div>
+    </div>
+    <div class="timeline-actions">
+      <button class="btn" onclick="toggleAllSteps(${q.id})" id="toggleAllBtn">&#x1F504; 全部展开</button>
+    </div>
+    <div class="timeline">
+  `;
+
+  q.steps.forEach((step, i) => {
+    const ss = STATUS[step.status] || STATUS.success;
+    const sn = STEP_NAMES[step.type] || { zh: step.type, en: '' };
+    const durMs = step.duration;
+    const durText = durMs >= 1000 ? (durMs / 1000).toFixed(2) + 's' : durMs + 'ms';
+    const barPct = Math.max(4, (durMs / maxDur) * 100);
+    const stepId = `step-${q.id}-${i}`;
+    const isError = (ss.level || 0) >= 2;
+
+    let tokensHtml = '';
+    if (step.tokens) {
+      tokensHtml = `<div class="step-tokens">
+        <span class="tok-label">Prompt:</span>${fmtNum(step.tokens.prompt)}
+        <span class="tok-label"> Completion:</span>${fmtNum(step.tokens.completion)}
+        <span class="tok-label"> Total:</span>${fmtNum(step.tokens.total)}
+      </div>`;
+    } else {
+      tokensHtml = `<div class="step-tokens" style="color:#bfbfbf">— no tokens —</div>`;
+    }
+
+    let expandContent = '';
+    expandContent += expandSection('请求 Request', step.request, stepId + '-req');
+    expandContent += expandSection('响应 Response', step.response, stepId + '-res');
+    if (step.sql) {
+      expandContent += expandSqlSection('SQL', step.sql, stepId + '-sql');
+    }
+
+    // "Jump to SQL" button for sql_generation steps
+    let jumpSqlBtn = '';
+    if (step.type === 'sql_generation' && step.sql) {
+      jumpSqlBtn = `<button class="btn-jump-sql" onclick="event.stopPropagation(); jumpToSql('${stepId}-sql')">&#x27A1; 跳转到SQL</button>`;
+    }
+
+    html += `
+      <div class="timeline-step ${ss.stepCls}">
+        <div class="step-dot">${ss.icon}</div>
+        <div class="step-card" onclick="toggleExpand('${stepId}')">
+          <div class="step-card-header">
+            <span class="step-name">${sn.zh} <span class="step-name-en">${sn.en}</span></span>
+            ${jumpSqlBtn}
+            <span class="step-model">${esc(step.model)}</span>
+            <span class="step-timestamp">${step.timestamp}</span>
+            <span class="step-status-badge"><span class="status-badge ${ss.cls}"><span class="status-dot"></span>${ss.label}</span></span>
+          </div>
+          <div class="step-metrics">
+            <div class="step-duration">
+              <span class="dur-text">${durText}</span>
+              <div class="dur-bar-wrap"><div class="dur-bar" style="width:${barPct}%"></div></div>
+            </div>
+            ${tokensHtml}
+          </div>
+          <div class="step-expand ${isError ? 'open' : ''}" id="${stepId}">
+            ${expandContent}
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function expandSection(title, content, id) {
+  const lines = content.split('\n');
+  const linesHtml = lines.map((line, i) =>
+    `<div class="code-line"><span class="code-line-num">${i + 1}</span><span class="code-line-content">${esc(line)}</span></div>`
+  ).join('');
+  return `
+    <div class="expand-section">
+      <div class="expand-section-header">
+        <span>${title}</span>
+        <span style="display:flex;gap:4px;">
+          <button class="expand-toggle-btn" onclick="event.stopPropagation(); toggleBodyExpand(this)">全部展开</button>
+          <button class="copy-btn" onclick="event.stopPropagation(); copyText('${id}')">Copy</button>
+        </span>
+      </div>
+      <div class="expand-section-body" id="${id}"><div class="code-with-lines">${linesHtml}</div></div>
+    </div>
+  `;
+}
+
+function expandSqlSection(title, sql, id) {
+  const highlighted = highlightSql(sql);
+  const lines = highlighted.split('\n');
+  const linesHtml = lines.map((line, i) =>
+    `<div class="code-line"><span class="code-line-num">${i + 1}</span><span class="code-line-content">${line}</span></div>`
+  ).join('');
+  return `
+    <div class="expand-section">
+      <div class="expand-section-header">
+        <span>${title}</span>
+        <span style="display:flex;gap:4px;">
+          <button class="expand-toggle-btn" onclick="event.stopPropagation(); toggleBodyExpand(this)">全部展开</button>
+          <button class="copy-btn" onclick="event.stopPropagation(); copyText('${id}')">Copy</button>
+        </span>
+      </div>
+      <div class="expand-section-body sql-body" id="${id}"><div class="code-with-lines">${linesHtml}</div></div>
+    </div>
+  `;
+}
+
+function toggleBodyExpand(btn) {
+  const body = btn.closest('.expand-section').querySelector('.expand-section-body');
+  if (!body) return;
+  body.classList.toggle('expanded');
+  btn.textContent = body.classList.contains('expanded') ? '收起' : '全部展开';
+}
+
+function highlightSql(sql) {
+  let s = esc(sql);
+  const keywords = ['SELECT','FROM','WHERE','JOIN','LEFT JOIN','RIGHT JOIN','INNER JOIN','OUTER JOIN',
+    'ON','AND','OR','NOT','IN','AS','GROUP BY','ORDER BY','HAVING','LIMIT','OFFSET','WITH','COUNT',
+    'SUM','AVG','MIN','MAX','DISTINCT','BETWEEN','LIKE','IS','NULL','CASE','WHEN','THEN','ELSE','END',
+    'INSERT','UPDATE','DELETE','CREATE','DROP','ALTER','LEAST','GREATEST','DESC','ASC','INTERVAL','NOW',
+    'ROUND','STDDEV'];
+  keywords.sort((a, b) => b.length - a.length);
+  keywords.forEach(kw => {
+    const re = new RegExp('\\b(' + kw.replace(/\s+/g, '\\s+') + ')\\b', 'gi');
+    s = s.replace(re, '<span class="sql-keyword">$1</span>');
+  });
+  // Highlight strings
+  s = s.replace(/(&#39;[^]*?&#39;)/g, '<span class="sql-string">$1</span>');
+  // Highlight numbers (standalone)
+  s = s.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="sql-number">$1</span>');
+  return s;
+}
+
+function toggleExpand(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('open');
+}
+
+function toggleAllSteps(queryId) {
+  allStepsExpanded = !allStepsExpanded;
+  const q = queries.find(x => x.id === queryId);
+  if (!q) return;
+  q.steps.forEach((step, i) => {
+    const el = document.getElementById(`step-${queryId}-${i}`);
+    if (el) {
+      if (allStepsExpanded) el.classList.add('open');
+      else el.classList.remove('open');
+    }
+  });
+  const btn = document.getElementById('toggleAllBtn');
+  if (btn) btn.innerHTML = allStepsExpanded ? '&#x1F504; 全部收起' : '&#x1F504; 全部展开';
+}
+
+function jumpToSql(sqlId) {
+  const el = document.getElementById(sqlId);
+  if (!el) return;
+  // Expand the parent step if not already
+  const stepExpand = el.closest('.step-expand');
+  if (stepExpand && !stepExpand.classList.contains('open')) {
+    stepExpand.classList.add('open');
+  }
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('sql-highlight');
+  setTimeout(() => el.classList.remove('sql-highlight'), 1500);
+}
+
+function copyText(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const text = el.textContent || el.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = el.parentElement.querySelector('.copy-btn');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500); }
+  });
+}
+
+// ── By Step View ──
+function renderByStepView() {
+  const stepType = document.getElementById('stepTypeSelect').value;
+  const sn = STEP_NAMES[stepType];
+  const container = document.getElementById('byStepContent');
+  const filtered = getFilteredQueries();
+
+  // Gather all instances
+  let instances = [];
+  filtered.forEach(q => {
+    q.steps.forEach(step => {
+      if (step.type === stepType) {
+        instances.push({ ...step, queryId: q.id, question: q.question, queryStatus: q.status, querySource: q.source });
+      }
+    });
+  });
+
+  // Sort
+  if (currentSort === 'duration-asc') instances.sort((a, b) => a.duration - b.duration);
+  else if (currentSort === 'duration-desc') instances.sort((a, b) => b.duration - a.duration);
+  else if (currentSort === 'tokens-desc') instances.sort((a, b) => ((b.tokens?.total) || 0) - ((a.tokens?.total) || 0));
+  else instances.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+  if (instances.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4ED;</div><div>该步骤类型暂无记录 / No instances of this step type</div></div>';
+    return;
+  }
+
+  let html = `<table class="bystep-table">
+    <thead><tr>
+      <th>来源</th>
+      <th>问题 Question</th>
+      <th>模型 Model</th>
+      <th>耗时 Duration</th>
+      <th>Tokens (Prompt/Completion/Total)</th>
+      <th>状态 Status</th>
+      <th>时间 Timestamp</th>
+    </tr></thead><tbody>`;
+
+  instances.forEach(inst => {
+    const ss = STATUS[inst.status] || STATUS.success;
+    const durText = inst.duration >= 1000 ? (inst.duration / 1000).toFixed(2) + 's' : inst.duration + 'ms';
+    const tokText = inst.tokens
+      ? `${fmtNum(inst.tokens.prompt)} / ${fmtNum(inst.tokens.completion)} / ${fmtNum(inst.tokens.total)}`
+      : '—';
+
+    html += `<tr>
+      <td>${sourceTagHtml(inst.querySource)}</td>
+      <td><span class="status-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${(STATUS[inst.queryStatus]||STATUS.success).color};margin-right:6px;vertical-align:middle"></span><a class="q-link" onclick="selectQuery(${inst.queryId})" title="${esc(inst.question)}" style="max-width:250px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">${esc(inst.question)}</a></td>
+      <td class="cell-mono">${esc(inst.model)}</td>
+      <td class="cell-mono">${durText}</td>
+      <td class="cell-tokens">${tokText}</td>
+      <td><span class="status-badge ${ss.cls}"><span class="status-dot"></span>${ss.label}</span></td>
+      <td class="cell-mono">${inst.timestamp.replace(/\.\d+$/, '')}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function setSort(sort) {
+  currentSort = sort;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === sort));
+  renderByStepView();
+}
+
+// ── View Switching ──
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+  document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
+  document.getElementById(view === 'byQuery' ? 'byQueryView' : 'byStepView').classList.add('active');
+  if (view === 'byStep') renderByStepView();
+  if (view === 'byQuery') { renderQueryList(); renderTimeline(); }
+}
+
+// ── Clear ──
+function showClearConfirm() { document.getElementById('confirmOverlay').classList.add('show'); }
+function hideClearConfirm() { document.getElementById('confirmOverlay').classList.remove('show'); }
+function clearAll() {
+  queries.length = 0;
+  selectedQueryId = null;
+  hideClearConfirm();
+  renderAll();
+}
+
+// ── Helpers ──
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function fmtNum(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n); }
+
+// ── Init ──
+function renderAll() {
+  renderSummary();
+  renderQueryList();
+  renderTimeline();
+  if (currentView === 'byStep') renderByStepView();
+}
+renderAll();
+</script>
+</body>
+</html>

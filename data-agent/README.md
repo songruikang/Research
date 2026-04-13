@@ -135,6 +135,9 @@ Step 4: python telecom/scripts/4_refresh_timestamps.py  # 评测前刷新时间
 
 ## LLM Trace
 
-`trace_callback.py` 以 sitecustomize.py 挂载到 ai-service，拦截所有 LLM 调用写入 `data/llm_traces.jsonl`，UI Logs 页面展示。
+`trace_callback.py` 以 sitecustomize.py 挂载到 ai-service，拦截所有 LLM 调用写入 `data/llm_traces.jsonl`。
+数据导入到 SQLite 的 `trace_query` / `trace_step` 表（migration 在 wren-ui 启动时自动执行）。
+
+**Logs 页面：** http://localhost:3000/logs 查看追踪记录。
 
 清空：`> WrenAI/docker/data/llm_traces.jsonl`
