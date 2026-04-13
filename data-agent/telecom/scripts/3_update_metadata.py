@@ -64,10 +64,25 @@ total_cols = sum(len(m.get("columns", [])) for m in mdl["models"])
 print(f"  字段: {total_cols} 个")
 
 # ---------------------------------------------------------------------------
-# Step 1: 从容器拷贝 SQLite
+# Step 1: 从容器拷贝 SQLite（WAL checkpoint + 三文件）
 # ---------------------------------------------------------------------------
 step("1. 从容器拷贝 SQLite 数据库")
+
+# WAL 模式下数据可能在 -wal 文件中，先 checkpoint 强制写回主文件
+run(
+    f"docker exec {CONTAINER} sqlite3 {REMOTE_DB} \"PRAGMA wal_checkpoint(TRUNCATE);\"",
+    check=False,  # 容器内可能没有 sqlite3 CLI，忽略失败
+)
+
+# 拷贝主文件
 run(f"docker cp {CONTAINER}:{REMOTE_DB} {LOCAL_DB}")
+
+# 同时拷贝 WAL 和 SHM 文件（如果存在）
+for suffix in ["-wal", "-shm"]:
+    r = run(f"docker cp {CONTAINER}:{REMOTE_DB}{suffix} {LOCAL_DB}{suffix}", check=False)
+    if r.returncode == 0:
+        print(f"  已拷贝 {suffix} 文件")
+
 print(f"  已拷贝到 {LOCAL_DB}")
 
 # ---------------------------------------------------------------------------
@@ -79,10 +94,25 @@ conn = sqlite3.connect(LOCAL_DB)
 conn.row_factory = sqlite3.Row
 c = conn.cursor()
 
+# 前置检查：确认 SQLite 拷贝成功且有数据
+tables = [r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+if "model" not in tables:
+    print(f"  ✗ SQLite 中没有 model 表（现有表: {tables}）")
+    print(f"  请确认 WrenAI UI 已完成数据源配置和 Deploy")
+    conn.close()
+    sys.exit(1)
+
 # 建立映射: table_name → model_id
 model_map = {}
 for row in c.execute("SELECT id, source_table_name FROM model"):
     model_map[row["source_table_name"]] = row["id"]
+
+if not model_map:
+    print(f"  ✗ model 表有0行数据")
+    print(f"  可能原因: WAL数据未checkpoint、容器内DB路径不对、或UI未Deploy")
+    print(f"  排查: docker exec {CONTAINER} sqlite3 {REMOTE_DB} 'SELECT COUNT(*) FROM model;'")
+    conn.close()
+    sys.exit(1)
 
 # 建立映射: (model_id, col_name) → column row
 col_map = {}
@@ -225,10 +255,20 @@ conn.close()
 # Step 4: 拷贝回容器 + 重启 + 部署
 # ---------------------------------------------------------------------------
 step("4. 拷贝 SQLite 回容器并重启")
+# 先停容器避免写入冲突
+run(f"docker stop {CONTAINER}")
 run(f"docker cp {LOCAL_DB} {CONTAINER}:{REMOTE_DB}")
+# 同时拷回 WAL 和 SHM 文件（如果存在）
+for suffix in ["-wal", "-shm"]:
+    local_f = f"{LOCAL_DB}{suffix}"
+    if os.path.exists(local_f):
+        run(f"docker cp {local_f} {CONTAINER}:{REMOTE_DB}{suffix}")
+    else:
+        # 删除容器内残留的 WAL/SHM，避免和新主文件不一致
+        run(f"docker exec {CONTAINER} rm -f {REMOTE_DB}{suffix}", check=False)
 print("  已拷贝回容器")
 
-run(f"docker restart {CONTAINER}")
+run(f"docker start {CONTAINER}")
 print("  已重启 wren-ui，等待启动...")
 time.sleep(12)
 
