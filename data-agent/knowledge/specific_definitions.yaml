@@ -1,0 +1,179 @@
+# 专项定义 — 按关键词匹配注入
+# 覆盖 100 题中所有需要额外领域知识的概念
+
+definitions:
+  # ═══ 复杂业务概念 ═══
+  - id: DEF_SINGLE_POINT_FAILURE
+    trigger: ["单点故障", "单链路"]
+    knowledge: |
+      单点故障链路 = 两个站点之间只有一条物理链路。
+      实现: 用 LEAST(a_site_id, z_site_id) 和 GREATEST(a_site_id, z_site_id) 归一化站点对方向，
+      GROUP BY 归一化后的站点对 HAVING COUNT(*)=1。
+      如果还要求承载特定VPN，需要通过链路两端NE的 ne_id 去 t_vpn_pe_binding 关联。
+
+  - id: DEF_HEALTH_SCORE
+    trigger: ["健康评分", "健康分", "综合健康"]
+    knowledge: |
+      设备健康评分是自定义复合指标，需根据题目给出的规则计算。
+      常见模式: 多个KPI各占N分，达标得满分，不达标得0分。
+      实现: AVG(CASE WHEN metric < threshold THEN score ELSE 0 END) 对每个维度分别计算后求和。
+      常见阈值: CPU<70得25分, 内存<75得25分, 温度<60得25分, 重大+严重告警<5得25分。
+      字段来源: t_ne_perf_kpi (cpu_usage_avg_pct, memory_usage_avg_pct, temperature_avg_c, alarm_critical_count, alarm_major_count)。
+
+  - id: DEF_BGP_AVAILABILITY
+    trigger: ["BGP可用率", "BGP对等体可用率"]
+    knowledge: |
+      BGP对等体可用率 = bgp_peer_up_count * 100.0 / NULLIF(bgp_peer_total_count, 0)
+      字段在 t_ne_perf_kpi 表中。需按时间窗口聚合后计算。
+
+  - id: DEF_VRF_ROUTE_UTIL
+    trigger: ["VRF路由利用率", "路由利用率"]
+    knowledge: |
+      VRF路由利用率 = current_route_count * 100.0 / NULLIF(max_routes, 0)
+      字段都在 t_vrf_instance 表中。
+
+  - id: DEF_SLA_COMPLIANCE
+    trigger: ["SLA违规率", "SLA达标率", "违规率", "达标率"]
+    knowledge: |
+      SLA达标率 = SUM(CASE WHEN sla_overall_met THEN 1 ELSE 0 END) * 100.0 / COUNT(*)
+      SLA违规率 = 100 - SLA达标率，或 SUM(CASE WHEN NOT sla_overall_met THEN 1 ELSE 0 END) * 100.0 / COUNT(*)
+      单项达标: sla_latency_met, sla_jitter_met, sla_loss_met, sla_availability_met
+      综合达标: sla_overall_met（全部子项达标时为TRUE）
+      字段在 t_vpn_sla_kpi 表中。
+
+  - id: DEF_SLA_STATUS_SWITCH
+    trigger: ["SLA状态切换", "状态切换", "达标/不达标变化"]
+    knowledge: |
+      SLA状态切换 = 相邻两条记录的 sla_overall_met 值不同。
+      实现: LAG(sla_overall_met) OVER (PARTITION BY vpn_id ORDER BY collect_time)
+      比较当前值与前一个值，不相同则计为一次切换。
+      注意: 第一条记录（LAG为NULL）不算切换。
+
+  - id: DEF_TREND_COMPARISON
+    trigger: ["环比", "趋势", "对比上周", "周对比", "每日趋势"]
+    knowledge: |
+      环比变化 = 当前值 - LAG(当前值) OVER (ORDER BY 时间维度)
+      周对比: 用 CASE WHEN collect_time >= CURRENT_DATE - 7 THEN 'THIS_WEEK' ELSE 'LAST_WEEK' END 分桶，
+      分别聚合后比较。注意要两周数据都有才能对比。
+      日趋势: GROUP BY DATE(collect_time)，用 LAG() 计算日间变化。
+
+  - id: DEF_TRAFFIC_GROWTH
+    trigger: ["流量增长", "增长最快", "流量变化"]
+    knowledge: |
+      流量增长 = 当前时段平均值 - 上一时段平均值。
+      双时间窗实现:
+        当前窗: WHERE collect_time >= NOW() - INTERVAL 'N' HOUR
+        历史窗: WHERE collect_time >= NOW() - INTERVAL '2N' HOUR AND collect_time < NOW() - INTERVAL 'N' HOUR
+      分别求 AVG 后做差值。
+
+  - id: DEF_CROSS_REGION
+    trigger: ["跨区域", "跨区域部署"]
+    knowledge: |
+      判断VPN是否跨区域: VPN → t_vpn_pe_binding(vpn_id) → t_network_element(ne_id) → t_site(site_id) → region
+      COUNT(DISTINCT s.region) > 1 表示跨区域。
+
+  - id: DEF_RACK_UTILIZATION
+    trigger: ["机柜利用率", "机柜使用率"]
+    knowledge: |
+      机柜利用率 = used_rack_count * 100.0 / NULLIF(total_rack_count, 0)
+      字段在 t_site 表中。
+
+  - id: DEF_MONTHLY_LOSS_RISK
+    trigger: ["月化丢包风险", "丢包风险"]
+    knowledge: |
+      月化丢包风险 = AVG(e2e_packet_loss_pct) × monthly_fee
+      需要 t_vpn_sla_kpi 与 t_l3vpn_service 关联。
+
+  - id: DEF_NETWORK_PRESSURE
+    trigger: ["网络压力指数", "压力指数"]
+    knowledge: |
+      网络压力指数是跨事实表的自定义复合指标，按站点维度汇总。
+      常见公式: 0.4×平均CPU + 0.3×平均内存 + 0.3×平均接口利用率
+      需要 t_ne_perf_kpi (CPU/内存) 和 t_interface_perf_kpi (接口利用率)，
+      通过 NE → site 关联到站点维度。
+
+  - id: DEF_HUB_SPOKE
+    trigger: ["Hub-Spoke", "HUB角色", "HUB", "SPOKE"]
+    knowledge: |
+      Hub-Spoke拓扑中的HUB/SPOKE角色不在设备表，而在 t_vpn_pe_binding.pe_role 字段。
+      pe_role 取值: HUB, SPOKE, FULL_MESH。
+
+  - id: DEF_EFFICIENCY
+    trigger: ["效率最差", "效率"]
+    knowledge: |
+      VPN效率 = 平均时延 / SLA保证带宽。
+      平均时延: AVG(e2e_latency_avg_ms) from t_vpn_sla_kpi
+      SLA保证带宽: bandwidth_mbps from t_l3vpn_service
+      同客户内取该比值最高(效率最差)的VPN。
+
+  - id: DEF_CONTRACT_EXPIRY
+    trigger: ["合同到期", "合同将在", "合同即将到期", "合同已过期"]
+    knowledge: |
+      站点合同到期: t_site.contract_expire_date
+      VPN合同到期: t_l3vpn_service.contract_end_date
+      '即将到期(N天内)' → date_field BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL 'N' DAY
+      '已过期' → date_field < CURRENT_DATE
+
+  - id: DEF_CROSS_FACT_TABLE
+    trigger: ["同时满足", "同时", "且", "复合条件"]
+    knowledge: |
+      跨事实表复合条件(如高CPU且高接口错误)，需要分别在各KPI表聚合后再JOIN或INTERSECT。
+      模式: WITH agg1 AS (SELECT ne_id, metric FROM kpi1 GROUP BY ne_id HAVING ...),
+            agg2 AS (SELECT ne_id, metric FROM kpi2 GROUP BY ne_id HAVING ...)
+      SELECT ... FROM agg1 JOIN agg2 USING (ne_id)
+
+  - id: DEF_CE_AS_REUSE
+    trigger: ["CE AS号", "AS号重复", "AS号复用"]
+    knowledge: |
+      CE AS号复用风险: 相同 ce_as_number 出现在多个不同 customer_id 的 EBGP 接入记录中。
+      实现: GROUP BY ce_as_number HAVING COUNT(DISTINCT customer_id) > 1
+      数据来源: t_vpn_pe_binding，过滤 routing_protocol='EBGP'
+
+  - id: DEF_TUNNEL_VPN_ASSOC
+    trigger: ["隧道承载", "承载隧道", "关联隧道"]
+    knowledge: |
+      隧道与VPN通过 t_tunnel.associated_vpn_ids 关联（文本字段，逗号分隔的VPN ID列表）。
+      匹配: associated_vpn_ids LIKE CONCAT('%', v.vpn_id, '%')
+      注意: 这是弱关联，不是外键。
+
+  - id: DEF_LATEST_SAMPLE
+    trigger: ["最新", "最近一次", "最新一个采集"]
+    knowledge: |
+      获取最新样本有两种方式:
+      1. CTE: WITH latest AS (SELECT entity_id, MAX(collect_time) AS max_time FROM kpi GROUP BY entity_id)
+         然后 JOIN latest ON entity_id AND collect_time = max_time
+      2. 窗口函数: ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY collect_time DESC) = 1
+
+  - id: DEF_TOP_N_PER_GROUP
+    trigger: ["每个", "各", "前N", "排名前", "Top"]
+    knowledge: |
+      分组内TopN使用窗口函数:
+      ROW_NUMBER() OVER (PARTITION BY group_col ORDER BY metric DESC) AS rn
+      外层 WHERE rn <= N
+
+  - id: DEF_BOARD_TEMPERATURE
+    trigger: ["单板温度", "温度超过阈值", "温度阈值"]
+    knowledge: |
+      单板温度阈值在 t_board.temperature_threshold。
+      观测温度在 t_ne_perf_kpi.temperature_avg_c（设备级别，不是单板级别）。
+      关联: t_board.ne_id = t_ne_perf_kpi.ne_id，比较设备平均温度与单板阈值。
+
+  - id: DEF_INTERFACE_STATUS_MISMATCH
+    trigger: ["运行状态不一致", "状态不匹配", "状态UP但KPI"]
+    knowledge: |
+      接口状态不一致 = 基础表 t_interface.oper_status='UP' 但最新 KPI 中 oper_status='DOWN'。
+      需要先取每个接口最新的KPI记录，再与接口基础表比较。
+
+  - id: DEF_LINK_VENDOR_MISMATCH
+    trigger: ["不同厂商", "异厂商"]
+    knowledge: |
+      异厂商链路: 物理链路两端设备的 vendor 不同。
+      JOIN t_network_element 两次: ne_a ON a_ne_id, ne_z ON z_ne_id
+      WHERE ne_a.vendor != ne_z.vendor
+
+  - id: DEF_SITE_LINK_COUNT
+    trigger: ["站点链路", "链路端点"]
+    knowledge: |
+      站点的物理链路端点数 = 该站点作为 a_site_id 或 z_site_id 出现的次数。
+      实现: 将 a_site_id 和 z_site_id UNION ALL 后 GROUP BY site_id COUNT(*)
+      或: SUM(CASE WHEN a_site_id=s.site_id THEN 1 ELSE 0 END) + SUM(CASE WHEN z_site_id=s.site_id THEN 1 ELSE 0 END)

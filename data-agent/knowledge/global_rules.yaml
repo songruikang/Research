@@ -1,0 +1,99 @@
+# 全局规则 — 每次查询都注入
+# 从 100 题隐性知识中提取的通用规则
+
+rules:
+  # ═══ 枚举值规范 ═══
+  - id: ENUM_VENDOR
+    rule: "vendor 字段值全大写: HUAWEI, ZTE, CISCO, JUNIPER。中文→英文映射：华为→HUAWEI，中兴→ZTE，思科→CISCO，瞻博→JUNIPER"
+  - id: ENUM_ROLE
+    rule: "role 字段取值: PE(Provider Edge/接入), P(Provider/骨干), CE(Customer Edge/客户侧), RR(Route Reflector/反射器), ASBR(域边界), ABR(区域边界)"
+  - id: ENUM_OPER_STATUS
+    rule: "oper_status 取值: UP(正常运行), DOWN(故障), DEGRADED(降级)"
+  - id: ENUM_ADMIN_STATUS
+    rule: "admin_status 取值: UP(启用), DOWN(停用), TESTING(测试中)"
+  - id: ENUM_STATUS_DISTINCTION
+    rule: "'在网设备'或'运行正常'→ oper_status='UP'，不是 admin_status。admin_status 是人工管理状态，oper_status 是系统检测的实际运行状态"
+  - id: ENUM_SERVICE_LEVEL
+    rule: "service_level 取值: PLATINUM(铂金), GOLD(金), SILVER(银), BRONZE(铜)。'金牌VPN'→service_level='GOLD'"
+  - id: ENUM_IF_TYPE
+    rule: "if_type 是逻辑接口类型: PHYSICAL(物理), LOOPBACK(环回), TRUNK(链路聚合), VLANIF(VLAN子接口), TUNNEL(隧道)。'接口类型统计'按 if_type 分组"
+  - id: ENUM_UNDERLAY_TYPE
+    rule: "underlay_type 取值: SRV6_TE, MPLS_TE, SR_MPLS, LDP。'SRv6 TE承载'→underlay_type='SRV6_TE'"
+  - id: ENUM_SITE_TIER
+    rule: "site.tier 取值: TIER1(核心), TIER2(汇聚), TIER3(接入)"
+  - id: ENUM_BOARD_TYPE
+    rule: "board_type 取值: MPU(主控板), LPU(线卡), SFU(交换网板), FAN(风扇模块), POWER(电源模块)"
+  - id: ENUM_PROTECTION
+    rule: "protection_type(隧道保护): HOT_STANDBY(热备), COLD_STANDBY(冷备), NONE(无保护)"
+
+  # ═══ 组合条件模式 ═══
+  - id: COMBO_PHYSICAL_PORT
+    rule: "'XXX物理端口'(如100GE物理端口、400GE物理端口)需同时过滤两个字段: phy_type='XXX' AND if_type='PHYSICAL'"
+  - id: COMBO_ACTIVE_VPN
+    rule: "'ACTIVE VPN业务'→admin_status='ACTIVE'，通常还隐含 oper_status 的检查"
+  - id: COMBO_SRV6_ENABLED
+    rule: "'已使能SRv6'→srv6_enabled=TRUE；'配置了SRv6 Locator但未启用'→srv6_locator IS NOT NULL AND srv6_enabled=FALSE"
+  - id: COMBO_LOOPBACK
+    rule: "'Loopback接口'→if_type='LOOPBACK'"
+  - id: COMBO_ONLINE_PE
+    rule: "'在网PE设备'→role='PE' AND oper_status='UP'"
+
+  # ═══ DuckDB 语法 ═══
+  - id: SYNTAX_INTERVAL
+    rule: "DuckDB 时间间隔语法: INTERVAL '24' HOUR 或 INTERVAL '7' DAY。也可写 INTERVAL 24 HOUR。注意 NOW() 返回当前时间戳"
+  - id: SYNTAX_BOOLEAN
+    rule: "布尔字段直接用: WHERE srv6_enabled (TRUE) 或 WHERE NOT srv6_enabled (FALSE)。也可写 WHERE srv6_enabled = TRUE。不要写 = 'true' 或 = 1"
+  - id: SYNTAX_NULLIF
+    rule: "除法防零: 使用 NULLIF(divisor, 0)。例如 used / NULLIF(total, 0)"
+  - id: SYNTAX_PCT
+    rule: "百分比字段如 cpu_usage_avg_pct, memory_usage_avg_pct 存的是 0-100 的值，不是 0-1"
+
+  # ═══ 常用 JOIN 路径 ═══
+  - id: JOIN_VPN_PE
+    rule: "VPN → PE设备: t_l3vpn_service JOIN t_vpn_pe_binding ON vpn_id JOIN t_network_element ON ne_id"
+  - id: JOIN_NE_SITE
+    rule: "设备 → 站点: t_network_element JOIN t_site ON site_id。用于获取城市、区域等地理信息"
+  - id: JOIN_NE_KPI
+    rule: "设备 → 性能KPI: t_network_element JOIN t_ne_perf_kpi ON ne_id"
+  - id: JOIN_IF_KPI
+    rule: "接口 → 性能KPI: t_interface JOIN t_interface_perf_kpi ON if_id (ne_id 也可 JOIN)"
+  - id: JOIN_TUNNEL_KPI
+    rule: "隧道 → 性能KPI: t_tunnel JOIN t_tunnel_perf_kpi ON tunnel_id"
+  - id: JOIN_VPN_SLA
+    rule: "VPN → SLA KPI: t_l3vpn_service JOIN t_vpn_sla_kpi ON vpn_id"
+  - id: JOIN_TUNNEL_POLICY
+    rule: "隧道 → SRv6 Policy: t_tunnel JOIN t_srv6_policy ON policy_id"
+  - id: JOIN_VPN_REGION
+    rule: "VPN → 区域: t_l3vpn_service → t_vpn_pe_binding(vpn_id) → t_network_element(ne_id) → t_site(site_id) → region。VPN 没有直接的 region 字段"
+  - id: JOIN_LINK_NE
+    rule: "物理链路两端设备: t_physical_link JOIN t_network_element ne_a ON a_ne_id = ne_a.ne_id JOIN t_network_element ne_z ON z_ne_id = ne_z.ne_id"
+
+  # ═══ 公式模式 ═══
+  - id: FORMULA_UTILIZATION
+    rule: "利用率类指标 = used / NULLIF(total, 0) × 100。例如：机柜利用率 = used_rack_count * 100.0 / NULLIF(total_rack_count, 0)；VRF路由利用率 = current_route_count * 100.0 / NULLIF(max_routes, 0)"
+  - id: FORMULA_SLA_COMPLIANCE
+    rule: "SLA达标率 = SUM(CASE WHEN sla_overall_met THEN 1 ELSE 0 END) * 100.0 / COUNT(*)。单项: sla_latency_met, sla_jitter_met, sla_loss_met, sla_availability_met。综合: sla_overall_met"
+  - id: FORMULA_BGP_AVAILABILITY
+    rule: "BGP对等体可用率 = bgp_peer_up_count * 100.0 / NULLIF(bgp_peer_total_count, 0)。字段在 t_ne_perf_kpi"
+  - id: FORMULA_ALARM_PRESSURE
+    rule: "告警压力 = alarm_critical_count + alarm_major_count。字段在 t_ne_perf_kpi"
+  - id: FORMULA_ERROR_PACKETS
+    rule: "接口错误包总数 = in_error_packets + out_error_packets。丢弃包总数 = in_discard_packets + out_discard_packets"
+  - id: FORMULA_TUNNEL_SLA_VIOLATION_RATE
+    rule: "隧道SLA违规率 = SUM(CASE WHEN sla_violation THEN 1 ELSE 0 END) * 100.0 / COUNT(*)。字段在 t_tunnel_perf_kpi"
+
+  # ═══ 反查模式 ═══
+  - id: ANTI_JOIN
+    rule: "'没有任何XXX'/'不存在XXX'类查询使用 NOT EXISTS 子查询。例如：'没有板卡的设备'→ WHERE NOT EXISTS (SELECT 1 FROM t_board WHERE ne_id = ne.ne_id)；'没有绑定的VPN'→ WHERE NOT EXISTS (SELECT 1 FROM t_vpn_pe_binding WHERE vpn_id = v.vpn_id)"
+
+  # ═══ 时间窗口模式 ═══
+  - id: TIME_WINDOW
+    rule: "'最近N天/小时'→ WHERE collect_time >= NOW() - INTERVAL 'N' DAY/HOUR。CURRENT_DATE 也可用于日期级别过滤"
+  - id: TIME_LATEST
+    rule: "'最新一个采集周期'→ 先用子查询/CTE 取 MAX(collect_time)，再过滤。或用 ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY collect_time DESC) = 1"
+
+  # ═══ 关联模式 ═══
+  - id: ASSOC_TUNNEL_VPN
+    rule: "隧道与VPN的关联通过 t_tunnel.associated_vpn_ids (文本字段，包含逗号分隔的VPN ID)。用 LIKE '%' || vpn_id || '%' 或 CONCAT('%', vpn_id, '%') 做模糊匹配"
+  - id: ASSOC_VRF_BINDING
+    rule: "VRF实例与VPN接入绑定通过 t_vpn_pe_binding.vrf_id 关联"
