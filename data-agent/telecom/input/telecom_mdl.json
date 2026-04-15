@@ -936,7 +936,7 @@
           "expression": "if_type",
           "properties": {
             "displayName": "Interface Type",
-            "description": "接口逻辑类型：PHYSICAL(物理口)、LOOPBACK、VLANIF、ETH-TRUNK(聚合口)、TUNNEL、NULL。取值: PHYSICAL;ETH-TRUNK;LOOPBACK;VLANIF;TUNNEL"
+            "description": "接口逻辑类型：PHYSICAL(物理口)、ETH-TRUNK(聚合口)、LOOPBACK、VLANIF、TUNNEL。取值: PHYSICAL;ETH-TRUNK;LOOPBACK;VLANIF;TUNNEL"
           }
         },
         {
@@ -2042,7 +2042,7 @@
           "expression": "admin_status",
           "properties": {
             "displayName": "Admin Status",
-            "description": "业务管理状态。取值: ACTIVE;SUSPENDED;TERMINATED"
+            "description": "业务管理状态（注意：与网络层 UP/DOWN 不同，业务层使用独立状态枚举）。取值: ACTIVE;SUSPENDED;TERMINATED"
           }
         },
         {
@@ -2851,7 +2851,7 @@
           "expression": "associated_vpn_ids",
           "properties": {
             "displayName": "Associated VPN IDs",
-            "description": "承载的VPN ID列表（JSON）"
+            "description": "承载的VPN ID列表（TEXT类型存储JSON数组，如'[\"vpn-001\",\"vpn-002\"]'。查询关联时用 LIKE CONCAT('%', vpn_id, '%') 进行包含匹配）"
           }
         },
         {

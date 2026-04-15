@@ -10,7 +10,7 @@
     "id": "Q02",
     "difficulty": "Easy",
     "question": "统计每个大区有多少个TIER1级别的站点。",
-    "implicit_knowledge": "见题目对应字段与表关系",
+    "implicit_knowledge": "region 和 tier 都在 t_site 表；TIER1→tier='TIER1'；按 region 分组 COUNT",
     "expected_sql": "SELECT region, COUNT(*) AS tier1_count\nFROM t_site\nWHERE tier = 'TIER1'\nGROUP BY region\nORDER BY tier1_count DESC;"
   },
   {
@@ -23,8 +23,8 @@
   {
     "id": "Q04",
     "difficulty": "Medium",
-    "question": "查询北京市所有网元的名称、型号和所在站点名称。",
-    "implicit_knowledge": "地理过滤在t_site上，需JOIN",
+    "question": "查询北京市所有网元的名称、型号、角色和所在站点名称。",
+    "implicit_knowledge": "城市过滤在 t_site.city='北京'；网元信息在 t_network_element；需 JOIN t_site ON ne.site_id = s.site_id",
     "expected_sql": "SELECT ne.ne_name, ne.model, ne.role, s.site_name\nFROM t_network_element ne\nJOIN t_site s ON ne.site_id = s.site_id\nWHERE s.city = '北京';"
   },
   {
@@ -52,14 +52,14 @@
     "id": "Q08",
     "difficulty": "Hard",
     "question": "找出GOLD级别VPN业务中，隧道实测时延超过SLA要求的记录。",
-    "implicit_knowledge": "需关联VPN→隧道→隧道KPI；SLA阈值在t_l3vpn_service.max_latency_ms上",
+    "implicit_knowledge": "GOLD级→service_level='GOLD' 且 admin_status='ACTIVE'；SLA阈值在 t_l3vpn_service.max_latency_ms；隧道与VPN的关联通过 t_tunnel.associated_vpn_ids（TEXT类型存储VPN ID的JSON列表），用 LIKE CONCAT('%', vpn_id, '%') 进行包含匹配；最新KPI用子查询取 MAX(collect_time)；需 JOIN t_tunnel_perf_kpi 取实测时延 latency_avg_ms",
     "expected_sql": "SELECT v.vpn_name, v.max_latency_ms AS sla_limit,\n       t.tunnel_name, tp.latency_avg_ms AS actual_latency,\n       ne_s.ne_name AS source, ne_d.ne_name AS dest\nFROM t_l3vpn_service v\nJOIN t_tunnel t ON t.associated_vpn_ids LIKE CONCAT('%', v.vpn_id, '%')\nJOIN t_tunnel_perf_kpi tp ON t.tunnel_id = tp.tunnel_id\nJOIN t_network_element ne_s ON t.source_ne_id = ne_s.ne_id\nJOIN t_network_element ne_d ON t.dest_ne_id = ne_d.ne_id\nWHERE v.service_level = 'GOLD' AND v.admin_status = 'ACTIVE'\n  AND tp.collect_time = (SELECT MAX(collect_time) FROM t_tunnel_perf_kpi WHERE tunnel_id = t.tunnel_id)\n  AND tp.latency_avg_ms > v.max_latency_ms;"
   },
   {
     "id": "Q09",
     "difficulty": "Hard",
     "question": "统计每台PE设备上所有物理接口的带宽利用率分布（空闲<30%/正常30-70%/繁忙70-90%/过载>90%），只看最新一个采集周期。",
-    "implicit_knowledge": "见题目对应字段与表关系",
+    "implicit_knowledge": "带宽利用率用 out_bandwidth_usage_pct；分桶用 CASE WHEN；最新采集周期=MAX(collect_time) from t_interface_perf_kpi；PE过滤→ne.role='PE'；物理口→i.if_type='PHYSICAL'；需 t_interface_perf_kpi JOIN t_interface JOIN t_network_element",
     "expected_sql": "WITH latest AS (SELECT MAX(collect_time) AS t FROM t_interface_perf_kpi)\nSELECT ne.ne_name,\n  COUNT(CASE WHEN k.out_bandwidth_usage_pct < 30 THEN 1 END) AS idle,\n  COUNT(CASE WHEN k.out_bandwidth_usage_pct BETWEEN 30 AND 70 THEN 1 END) AS normal,\n  COUNT(CASE WHEN k.out_bandwidth_usage_pct BETWEEN 70 AND 90 THEN 1 END) AS busy,\n  COUNT(CASE WHEN k.out_bandwidth_usage_pct > 90 THEN 1 END) AS overload\nFROM t_interface_perf_kpi k\nJOIN t_interface i ON k.if_id = i.if_id\nJOIN t_network_element ne ON k.ne_id = ne.ne_id\nCROSS JOIN latest l\nWHERE k.collect_time = l.t AND ne.role = 'PE' AND i.if_type = 'PHYSICAL'\nGROUP BY ne.ne_name\nORDER BY overload DESC;"
   },
   {
@@ -73,35 +73,35 @@
     "id": "Q11",
     "difficulty": "Extra Hard",
     "question": "找出SLA违规率最高的前5个VPN客户，统计每个客户的VPN数量、总违规次数和违规率（最近30天）。",
-    "implicit_knowledge": "见题目对应字段与表关系",
+    "implicit_knowledge": "SLA违规率=sla_overall_met=FALSE 的样本数/总样本数×100；客户维度通过 t_l3vpn_service.customer_id 聚合；VPN数量用 COUNT(DISTINCT vpn_id)；需 t_vpn_sla_kpi JOIN t_l3vpn_service；30天时间窗过滤 collect_time；仅统计 admin_status='ACTIVE' 的业务",
     "expected_sql": "WITH stats AS (\n  SELECT v.customer_id, v.customer_name,\n    COUNT(DISTINCT v.vpn_id) AS vpn_count,\n    COUNT(sk.kpi_id) AS total_samples,\n    SUM(CASE WHEN sk.sla_overall_met = FALSE THEN 1 ELSE 0 END) AS violations\n  FROM t_l3vpn_service v\n  JOIN t_vpn_sla_kpi sk ON v.vpn_id = sk.vpn_id\n  WHERE sk.collect_time >= CURRENT_DATE - INTERVAL '30 days'\n    AND v.admin_status = 'ACTIVE'\n  GROUP BY v.customer_id, v.customer_name\n)\nSELECT customer_name, vpn_count, violations, total_samples,\n  ROUND(violations * 100.0 / NULLIF(total_samples, 0), 2) AS violation_rate_pct\nFROM stats WHERE total_samples > 0\nORDER BY violation_rate_pct DESC LIMIT 5;"
   },
   {
     "id": "Q12",
     "difficulty": "Extra Hard",
     "question": "找出所有'单点故障'链路——两个站点之间只有一条物理链路、且该链路承载了GOLD级别VPN业务。",
-    "implicit_knowledge": "单点故障需推断为站点间链路数=1；链路→NE→VPN的间接关联",
+    "implicit_knowledge": "单点故障=站点对之间仅1条UP链路：用 LEAST(a_site_id,z_site_id)/GREATEST 归一化站点对，GROUP BY 后 HAVING COUNT(*)=1；链路承载GOLD VPN的间接关联：t_physical_link.a_ne_id → t_vpn_pe_binding.ne_id → t_l3vpn_service.service_level IN ('GOLD','PLATINUM')；注意 associated_vpn_ids 是TEXT类型JSON不适合直接JOIN，用绑定表走NE关联更可靠",
     "expected_sql": "WITH site_pair AS (\n  SELECT LEAST(a_site_id, z_site_id) AS s1,\n         GREATEST(a_site_id, z_site_id) AS s2,\n         COUNT(*) AS link_cnt, ARRAY_AGG(link_id) AS links\n  FROM t_physical_link WHERE oper_status = 'UP'\n  GROUP BY LEAST(a_site_id, z_site_id), GREATEST(a_site_id, z_site_id)\n  HAVING COUNT(*) = 1\n),\ngold_links AS (\n  SELECT DISTINCT pl.link_id\n  FROM t_physical_link pl\n  JOIN t_vpn_pe_binding b ON b.ne_id = pl.a_ne_id\n  JOIN t_l3vpn_service v ON b.vpn_id = v.vpn_id\n  WHERE v.service_level IN ('GOLD','PLATINUM') AND v.admin_status = 'ACTIVE'\n)\nSELECT pl.link_name, sa.site_name AS site_a, sz.site_name AS site_b,\n       pl.bandwidth_mbps, pl.distance_km\nFROM site_pair sp\nJOIN t_physical_link pl ON pl.link_id = ANY(sp.links)\nJOIN t_site sa ON sp.s1 = sa.site_id\nJOIN t_site sz ON sp.s2 = sz.site_id\nWHERE pl.link_id IN (SELECT link_id FROM gold_links);"
   },
   {
     "id": "Q13",
     "difficulty": "Medium",
     "question": "哪些PE已经使能了SRv6但还没有创建任何SRv6 Policy？",
-    "implicit_knowledge": "见题目对应字段与表关系",
+    "implicit_knowledge": "SRv6已使能→t_network_element.srv6_enabled=TRUE 且 role='PE'；无Policy→NOT EXISTS (SELECT 1 FROM t_srv6_policy WHERE source_ne_id=ne.ne_id)",
     "expected_sql": "SELECT ne.ne_name, ne.model, ne.srv6_locator\nFROM t_network_element ne\nWHERE ne.srv6_enabled = TRUE AND ne.role = 'PE'\n  AND NOT EXISTS (SELECT 1 FROM t_srv6_policy sp WHERE sp.source_ne_id = ne.ne_id);"
   },
   {
     "id": "Q14",
     "difficulty": "Hard",
     "question": "对比上周和本周各站点平均接口带宽利用率，找出增长超过20个百分点的站点。",
-    "implicit_knowledge": "见题目对应字段与表关系",
+    "implicit_knowledge": "上周/本周按 collect_time 是否>=CURRENT_DATE-7 分桶（THIS/LAST）；利用率取 out_bandwidth_usage_pct 按站点+周桶 AVG；站点维度需 t_interface_perf_kpi→t_network_element→t_site 三级JOIN；增长=本周AVG-上周AVG>20；14天时间窗过滤",
     "expected_sql": "WITH weekly AS (\n  SELECT s.site_id, s.site_name,\n    CASE WHEN k.collect_time >= CURRENT_DATE - 7 THEN 'THIS' ELSE 'LAST' END AS wk,\n    AVG(k.out_bandwidth_usage_pct) AS avg_bw\n  FROM t_interface_perf_kpi k\n  JOIN t_network_element ne ON k.ne_id = ne.ne_id\n  JOIN t_site s ON ne.site_id = s.site_id\n  WHERE k.collect_time >= CURRENT_DATE - 14\n  GROUP BY s.site_id, s.site_name,\n    CASE WHEN k.collect_time >= CURRENT_DATE - 7 THEN 'THIS' ELSE 'LAST' END\n)\nSELECT tw.site_name,\n  ROUND(lw.avg_bw, 2) AS last_week, ROUND(tw.avg_bw, 2) AS this_week,\n  ROUND(tw.avg_bw - lw.avg_bw, 2) AS increase\nFROM weekly tw JOIN weekly lw ON tw.site_id = lw.site_id\nWHERE tw.wk = 'THIS' AND lw.wk = 'LAST' AND (tw.avg_bw - lw.avg_bw) > 20\nORDER BY increase DESC;"
   },
   {
     "id": "Q15",
     "difficulty": "Extra Hard",
     "question": "为每条GOLD级VPN业务计算健康评分（时延达标+25分，抖动达标+25分，丢包达标+25分，可用率达标+25分），输出评分低于75分的业务。",
-    "implicit_knowledge": "见题目对应字段与表关系",
+    "implicit_knowledge": "健康评分=四个布尔字段各25分：sla_latency_met=TRUE→25分，sla_jitter_met→25分，sla_loss_met→25分，sla_availability_met→25分；对每个采集样本计算得分后按VPN取AVG；GOLD级→t_l3vpn_service.service_level='GOLD' 且 admin_status='ACTIVE'；需 t_vpn_sla_kpi JOIN t_l3vpn_service；建议取最近7天数据",
     "expected_sql": "WITH health AS (\n  SELECT v.vpn_id, v.vpn_name, v.customer_name,\n    AVG(CASE WHEN sk.sla_latency_met THEN 25 ELSE 0 END) +\n    AVG(CASE WHEN sk.sla_jitter_met THEN 25 ELSE 0 END) +\n    AVG(CASE WHEN sk.sla_loss_met THEN 25 ELSE 0 END) +\n    AVG(CASE WHEN sk.sla_availability_met THEN 25 ELSE 0 END) AS score,\n    AVG(sk.e2e_latency_avg_ms) AS lat, AVG(sk.e2e_packet_loss_pct) AS loss,\n    AVG(sk.availability_pct) AS avail\n  FROM t_l3vpn_service v\n  JOIN t_vpn_sla_kpi sk ON v.vpn_id = sk.vpn_id\n  WHERE v.service_level = 'GOLD' AND v.admin_status = 'ACTIVE'\n    AND sk.collect_time >= CURRENT_DATE - 7\n  GROUP BY v.vpn_id, v.vpn_name, v.customer_name\n)\nSELECT vpn_name, customer_name, ROUND(score, 1) AS health_score,\n  ROUND(lat, 2) AS avg_latency_ms, ROUND(loss, 4) AS avg_loss_pct,\n  ROUND(avail, 2) AS availability_pct\nFROM health WHERE score < 75 ORDER BY score;"
   },
   {
@@ -164,7 +164,7 @@
     "id": "Q24",
     "difficulty": "Easy",
     "question": "查询所有未启用MPLS但角色为P的设备。",
-    "implicit_knowledge": "P设备通常应参与骨干转发；题目显式检查 mpls_enabled=FALSE 且 role=P",
+    "implicit_knowledge": "P设备通常应参与骨干转发；role='P' 且 MPLS未启用；注意 mpls_enabled 是 BOOLEAN 可为 NULL，NULL 视为未启用，需用 COALESCE(mpls_enabled, FALSE) = FALSE",
     "expected_sql": "SELECT ne_id, ne_name, vendor, model, mpls_enabled\nFROM t_network_element\nWHERE role = 'P' AND COALESCE(mpls_enabled, FALSE) = FALSE\nORDER BY ne_name;"
   },
   {
@@ -213,7 +213,7 @@
     "id": "Q31",
     "difficulty": "Medium",
     "question": "找出配置了SRv6 Locator但SRv6未启用的设备。",
-    "implicit_knowledge": "配置存在不代表功能启用；需同时检查 srv6_locator 非空 且 srv6_enabled=FALSE",
+    "implicit_knowledge": "配置存在不代表功能启用；srv6_locator IS NOT NULL 表示已配置Locator；srv6_enabled 是 BOOLEAN 可为 NULL，NULL 视为未启用，需用 COALESCE(srv6_enabled, FALSE) = FALSE",
     "expected_sql": "SELECT ne_id, ne_name, vendor, srv6_locator, srv6_enabled\nFROM t_network_element\nWHERE srv6_locator IS NOT NULL AND COALESCE(srv6_enabled, FALSE) = FALSE\nORDER BY ne_name;"
   },
   {
@@ -317,8 +317,8 @@
   {
     "id": "Q46",
     "difficulty": "Hard",
-    "question": "找出最近7天平均温度超过阈值的单板所属设备。",
-    "implicit_knowledge": "单板温度阈值在 t_board.temperature_threshold，但观测温度只能从设备KPI温度近似映射到所属设备层",
+    "question": "找出最近7天设备平均温度超过其任一单板温度告警阈值的设备。",
+    "implicit_knowledge": "当前Schema无板卡级温度KPI，用设备级 t_ne_perf_kpi.temperature_avg_c 近似；单板温度阈值在 t_board.temperature_threshold；按设备聚合 AVG(temperature_avg_c)，与该设备所有单板中 MAX(temperature_threshold) 比较；需 t_board JOIN t_network_element JOIN t_ne_perf_kpi",
     "expected_sql": "SELECT ne.ne_name,\n       ROUND(AVG(k.temperature_avg_c), 2) AS avg_temp_c,\n       MAX(b.temperature_threshold) AS board_temp_threshold\nFROM t_board b\nJOIN t_network_element ne ON b.ne_id = ne.ne_id\nJOIN t_ne_perf_kpi k ON ne.ne_id = k.ne_id\nWHERE b.temperature_threshold IS NOT NULL\n  AND k.collect_time >= NOW() - INTERVAL '7 days'\nGROUP BY ne.ne_name\nHAVING AVG(k.temperature_avg_c) > MAX(b.temperature_threshold)\nORDER BY avg_temp_c DESC;"
   },
   {
@@ -437,7 +437,7 @@
     "id": "Q63",
     "difficulty": "Extra Hard",
     "question": "计算每台PE设备最近7天的综合健康分：CPU、内存、温度、告警四项各25分，要求输出低于60分的设备。",
-    "implicit_knowledge": "设备健康分是自定义规则：CPU<70、内存<75、温度<60、重大+严重告警均值<5 各得25分",
+    "implicit_knowledge": "设备健康分评分规则：CPU平均利用率<70%得25分，内存平均利用率<75%得25分，平均温度<60°C得25分，(alarm_critical_count+alarm_major_count)平均<5得25分，否则各项0分；PE设备→role='PE'；指标来自 t_ne_perf_kpi 最近7天；低于60分=至少3项不达标",
     "expected_sql": "WITH agg AS (\n  SELECT ne.ne_id, ne.ne_name,\n         AVG(k.cpu_usage_avg_pct) AS avg_cpu,\n         AVG(k.memory_usage_avg_pct) AS avg_mem,\n         AVG(k.temperature_avg_c) AS avg_temp,\n         AVG(k.alarm_critical_count + k.alarm_major_count) AS avg_alarm_pressure\n  FROM t_ne_perf_kpi k\n  JOIN t_network_element ne ON k.ne_id = ne.ne_id\n  WHERE ne.role = 'PE'\n    AND k.collect_time >= NOW() - INTERVAL '7 days'\n  GROUP BY ne.ne_id, ne.ne_name\n)\nSELECT ne_name,\n       (CASE WHEN avg_cpu < 70 THEN 25 ELSE 0 END +\n        CASE WHEN avg_mem < 75 THEN 25 ELSE 0 END +\n        CASE WHEN avg_temp < 60 THEN 25 ELSE 0 END +\n        CASE WHEN avg_alarm_pressure < 5 THEN 25 ELSE 0 END) AS health_score,\n       ROUND(avg_cpu, 2) AS avg_cpu,\n       ROUND(avg_mem, 2) AS avg_mem,\n       ROUND(avg_temp, 2) AS avg_temp,\n       ROUND(avg_alarm_pressure, 2) AS avg_alarm_pressure\nFROM agg\nWHERE (CASE WHEN avg_cpu < 70 THEN 25 ELSE 0 END +\n       CASE WHEN avg_mem < 75 THEN 25 ELSE 0 END +\n       CASE WHEN avg_temp < 60 THEN 25 ELSE 0 END +\n       CASE WHEN avg_alarm_pressure < 5 THEN 25 ELSE 0 END) < 60\nORDER BY health_score, ne_name;"
   },
   {
@@ -451,7 +451,7 @@
     "id": "Q65",
     "difficulty": "Extra Hard",
     "question": "找出那些最新SLA指标已不达标，但其承载隧道最新KPI仍显示sla_violation=FALSE的VPN。",
-    "implicit_knowledge": "跨层不一致：业务层SLA不达标，但底层隧道层未报违规；用 associated_vpn_ids 文本包含 vpn_id 近似表示弱关联",
+    "implicit_knowledge": "跨层不一致检测：业务层 sla_overall_met=FALSE 但隧道层 sla_violation=FALSE；VPN与隧道关联通过 t_tunnel.associated_vpn_ids（TEXT类型JSON列表），用 LIKE CONCAT('%', vpn_id, '%') 包含匹配；最新VPN SLA和最新隧道KPI各自取 MAX(collect_time)",
     "expected_sql": "WITH latest_vpn AS (\n  SELECT vpn_id, MAX(collect_time) AS max_time\n  FROM t_vpn_sla_kpi\n  GROUP BY vpn_id\n), latest_tunnel AS (\n  SELECT tunnel_id, MAX(collect_time) AS max_time\n  FROM t_tunnel_perf_kpi\n  GROUP BY tunnel_id\n)\nSELECT DISTINCT v.vpn_name, t.tunnel_name, sk.sla_overall_met, tk.sla_violation\nFROM latest_vpn lv\nJOIN t_vpn_sla_kpi sk ON lv.vpn_id = sk.vpn_id AND lv.max_time = sk.collect_time\nJOIN t_l3vpn_service v ON sk.vpn_id = v.vpn_id\nJOIN t_tunnel t ON t.associated_vpn_ids LIKE CONCAT('%', v.vpn_id, '%')\nJOIN latest_tunnel lt ON t.tunnel_id = lt.tunnel_id\nJOIN t_tunnel_perf_kpi tk ON lt.tunnel_id = tk.tunnel_id AND lt.max_time = tk.collect_time\nWHERE sk.sla_overall_met = FALSE AND tk.sla_violation = FALSE\nORDER BY v.vpn_name, t.tunnel_name;"
   },
   {
@@ -479,8 +479,8 @@
     "id": "Q69",
     "difficulty": "Extra Hard",
     "question": "查询每个客户在最近30天的平均月化丢包风险，定义为平均丢包率 × 业务月租费。",
-    "implicit_knowledge": "月化丢包风险是自定义风险指标：AVG(e2e_packet_loss_pct) * monthly_fee",
-    "expected_sql": "SELECT v.customer_id, v.customer_name,\n       ROUND(AVG(s.e2e_packet_loss_pct * v.monthly_fee), 4) AS loss_fee_risk\nFROM t_vpn_sla_kpi s\nJOIN t_l3vpn_service v ON s.vpn_id = v.vpn_id\nWHERE s.collect_time >= NOW() - INTERVAL '30 days'\nGROUP BY v.customer_id, v.customer_name\nORDER BY loss_fee_risk DESC, v.customer_name;"
+    "implicit_knowledge": "月化丢包风险=每条VPN的AVG(e2e_packet_loss_pct)×monthly_fee，再按客户SUM汇总；需先按VPN聚合平均丢包率，再乘以月租费，最后按客户求和",
+    "expected_sql": "WITH vpn_loss AS (\n  SELECT v.customer_id, v.customer_name, v.vpn_id, v.monthly_fee,\n         AVG(s.e2e_packet_loss_pct) AS avg_loss\n  FROM t_vpn_sla_kpi s\n  JOIN t_l3vpn_service v ON s.vpn_id = v.vpn_id\n  WHERE s.collect_time >= NOW() - INTERVAL '30 days'\n  GROUP BY v.customer_id, v.customer_name, v.vpn_id, v.monthly_fee\n)\nSELECT customer_id, customer_name,\n       ROUND(SUM(avg_loss * monthly_fee), 4) AS loss_fee_risk\nFROM vpn_loss\nGROUP BY customer_id, customer_name\nORDER BY loss_fee_risk DESC, customer_name;"
   },
   {
     "id": "Q70",
@@ -654,8 +654,8 @@
     "id": "Q94",
     "difficulty": "Extra Hard",
     "question": "统计每条SRv6 Policy最近7天关联隧道的平均实测时延，并找出超过Policy约束的策略。",
-    "implicit_knowledge": "Policy约束与 Tunnel 实测对比：通过 t_tunnel.policy_id 关联，再比较 AVG(measured_latency_ms) 与 sp.max_latency_ms",
-    "expected_sql": "SELECT sp.policy_id, sp.policy_name,\n       ROUND(AVG(t.measured_latency_ms), 2) AS avg_measured_latency_ms,\n       sp.max_latency_ms\nFROM t_srv6_policy sp\nJOIN t_tunnel t ON sp.policy_id = t.policy_id\nWHERE t.created_at >= NOW() - INTERVAL '7 days'\nGROUP BY sp.policy_id, sp.policy_name, sp.max_latency_ms\nHAVING AVG(t.measured_latency_ms) > sp.max_latency_ms\nORDER BY avg_measured_latency_ms DESC, sp.policy_name;"
+    "implicit_knowledge": "Policy约束与隧道KPI实测对比：通过 t_tunnel.policy_id 关联 Policy，再通过 t_tunnel_perf_kpi 取7天平均 latency_avg_ms，与 sp.max_latency_ms 比较。注意：t_tunnel.measured_latency_ms 是快照值，时序分析应使用 t_tunnel_perf_kpi",
+    "expected_sql": "SELECT sp.policy_id, sp.policy_name,\n       ROUND(AVG(tk.latency_avg_ms), 2) AS avg_latency_ms,\n       sp.max_latency_ms\nFROM t_srv6_policy sp\nJOIN t_tunnel t ON sp.policy_id = t.policy_id\nJOIN t_tunnel_perf_kpi tk ON t.tunnel_id = tk.tunnel_id\nWHERE tk.collect_time >= NOW() - INTERVAL '7 days'\nGROUP BY sp.policy_id, sp.policy_name, sp.max_latency_ms\nHAVING AVG(tk.latency_avg_ms) > sp.max_latency_ms\nORDER BY avg_latency_ms DESC, sp.policy_name;"
   },
   {
     "id": "Q95",
