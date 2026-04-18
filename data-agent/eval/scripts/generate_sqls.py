@@ -1,550 +1,308 @@
 """
-为 100 道评测题生成 6 组 LLM Prompt 文件（A-F 配置）
-
-每组配置对应不同的 Schema 策略 / Few-shot / 知识注入组合，
-输出的 prompt 文件供后续 LLM 生成 SQL 使用（Sub-Agent 或 generate_with_llm.py）。
+批量调用 LLM 生成 SQL — 用于非 Claude Code 环境（如公司 Ubuntu + Qwen3 32B）
 
 用法:
-  python eval/scripts/generate_sqls.py
+  # 全量跑 6 组配置（挂机模式，适合过夜）
+  python eval/scripts/generate_sqls.py \
+    --model openai/qwen3-32b \
+    --api-base http://10.220.239.55:8000/v1 \
+    --all
+
+  # 只跑指定配置
+  python eval/scripts/generate_sqls.py \
+    --model openai/qwen3-32b \
+    --api-base http://10.220.239.55:8000/v1 \
+    --prompt-config E
+
+  # Ollama 本地模型
+  python eval/scripts/generate_sqls.py \
+    --model ollama/qwen3:8b \
+    --prompt-config E
+
+  # 调试：只跑 10 题
+  python eval/scripts/generate_sqls.py \
+    --model ollama/qwen3:8b \
+    --prompt-config E \
+    --range Q01-Q10
 
 输入:
-  telecom/input/telecom_mdl.json         — Schema 定义（14 张表）
-  eval/telecom_test_cases_100.json       — 100 道评测题（question + implicit_knowledge）
-  eval/few_shot_pairs.json               — 43 条 few-shot 示例
+  .generated/prompts_{config}.json — 由 generate_prompts.py 生成
 
-输出（写入 eval/.generated/）:
-  prompts_fullschema_no_knowledge.json    — A: 全量 Schema，无知识
-  prompts_fullschema_with_knowledge.json  — B: 全量 Schema，有知识
-  prompts_schemalink_no_knowledge.json    — C: Schema Linking，无知识
-  prompts_schemalink_with_knowledge.json  — D: Schema Linking，有知识
-  prompts_fullschema_fewshot.json         — E: 全量 Schema + Few-shot（推荐）
-  prompts_fullschema_fewshot_knowledge.json — F: 全量 Schema + Few-shot + 知识
-  questions_only.json                     — 100 题纯文本（不含 expected_sql）
-  full_ddl.sql                            — 完整 DDL（调试用）
-
-每个 prompt 文件结构:
-  {"_meta": {...}, "prompts": {"Q01": {"user_prompt": "...", ...}, ...}}
+输出:
+  results/all_sqls.json — 自动追加新实验组
+  .generated/progress_{model}_{config}.json — 断点续跑进度文件
 """
-import json, re
+
+import json, sys, re, time, argparse, traceback
 from pathlib import Path
 from datetime import datetime
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-MDL_PATH = PROJECT_ROOT / "telecom" / "input" / "telecom_mdl.json"
-TEST_PATH = PROJECT_ROOT / "eval" / "telecom_test_cases_100.json"
+EVAL_DIR = PROJECT_ROOT / "eval"
+RESULTS_DIR = EVAL_DIR / "results"
+GENERATED_DIR = EVAL_DIR / ".generated"
 
-
-# ─── MDL 加载 ───
-
-def load_mdl():
-    with open(MDL_PATH) as f:
-        return json.load(f)
-
-
-def mdl_to_ddl(mdl: dict, tables_filter: list[str] | None = None,
-               columns_filter: dict[str, list[str]] | None = None) -> str:
-    """从 MDL 生成 DDL。支持表过滤和列过滤。"""
-    ddl_parts = []
-    for model in mdl.get("models", []):
-        table_name = model["name"]
-        if tables_filter and table_name not in tables_filter:
-            continue
-        desc = model.get("properties", {}).get("description", "")
-        columns = []
-        keep_cols = columns_filter.get(table_name) if columns_filter else None
-        for col in model.get("columns", []):
-            if col.get("isHidden"):
-                continue
-            col_name = col["name"]
-            # 列裁剪：保留 PK、FK、状态列、匹配列
-            if keep_cols and col_name not in keep_cols:
-                continue
-            col_type = col["type"]
-            col_desc = col.get("properties", {}).get("description", "")
-            pk = " PRIMARY KEY" if col_name == model.get("primaryKey") else ""
-            not_null = " NOT NULL" if col.get("notNull") else ""
-            comment = f"  -- {col_desc}" if col_desc else ""
-            columns.append(f"  {col_name} {col_type}{pk}{not_null},{comment}")
-        cols_str = "\n".join(columns)
-        table_comment = f"-- {desc}" if desc else ""
-        ddl_parts.append(f"{table_comment}\nCREATE TABLE {table_name} (\n{cols_str}\n);")
-    # FK 关系
-    rels = mdl.get("relationships", [])
-    if rels:
-        rel_tables = set(tables_filter) if tables_filter else None
-        fk_lines = []
-        for rel in rels:
-            condition = rel.get("condition", "")
-            if rel_tables:
-                if not any(t in condition for t in rel_tables):
-                    continue
-            join_type = rel.get("joinType", "")
-            desc = rel.get("properties", {}).get("description", "")
-            fk_lines.append(f"-- {condition}  ({join_type})  {desc}")
-        if fk_lines:
-            ddl_parts.append("\n-- ═══ RELATIONSHIPS ═══")
-            ddl_parts.extend(fk_lines)
-    return "\n\n".join(ddl_parts)
-
-
-# ─── Schema Linking ───
-
-DOMAIN_SYNONYMS = {
-    "隧道": ["t_tunnel", "tunnel"],
-    "时延": ["latency", "时延", "延迟"],
-    "抖动": ["jitter", "抖动"],
-    "丢包": ["packet_loss", "loss", "丢包"],
-    "带宽": ["bandwidth", "带宽", "利用率"],
-    "CPU": ["cpu_usage", "cpu"],
-    "内存": ["memory_usage", "memory", "内存"],
-    "温度": ["temperature", "温度"],
-    "告警": ["alarm", "告警"],
-    "功耗": ["power_consumption", "功耗"],
-    "风扇": ["fan_speed", "风扇"],
-    "站点": ["t_site", "site", "站点", "机房", "机柜"],
-    "网元": ["t_network_element", "ne_", "网元", "设备"],
-    "设备": ["t_network_element", "ne_", "网元", "设备"],
-    "接口": ["t_interface", "interface", "接口", "端口", "物理口"],
-    "端口": ["t_interface", "interface", "端口"],
-    "单板": ["t_board", "board", "单板", "板卡", "线卡"],
-    "板卡": ["t_board", "board", "板卡"],
-    "链路": ["t_physical_link", "link", "链路", "光纤"],
-    "VPN": ["t_l3vpn_service", "vpn", "业务"],
-    "VRF": ["t_vrf_instance", "vrf"],
-    "SRv6": ["t_srv6_policy", "srv6", "policy"],
-    "SLA": ["t_vpn_sla_kpi", "sla", "达标", "违规"],
-    "达标": ["sla", "达标", "t_vpn_sla_kpi"],
-    "违规": ["sla", "违规", "t_vpn_sla_kpi"],
-    "绑定": ["t_vpn_pe_binding", "binding", "绑定"],
-    "客户": ["customer", "客户", "t_l3vpn_service"],
-    "区域": ["region", "区域", "大区", "t_site"],
-    "KPI": ["kpi", "perf"],
-    "性能": ["kpi", "perf"],
-    "健康": ["cpu", "memory", "temperature", "alarm"],
-    "压力": ["cpu", "memory", "bandwidth"],
-    "利用率": ["usage", "utilization", "pct"],
-    "路由": ["route", "路由", "t_vrf_instance"],
-    "BGP": ["bgp", "bgp_peer"],
-    "MPLS": ["mpls"],
-    "合同": ["contract", "合同", "到期"],
-    "月租": ["monthly_fee", "月租"],
-    "环比": ["lag", "环比", "变化", "对比", "增长"],
-    "趋势": ["trend", "趋势", "每日", "daily"],
+CONFIG_NAMES = {
+    "A": "fullschema_no_knowledge",
+    "B": "fullschema_with_knowledge",
+    "C": "schemalink_no_knowledge",
+    "D": "schemalink_with_knowledge",
+    "E": "fullschema_fewshot",
+    "F": "fullschema_fewshot_knowledge",
 }
 
+CONFIG_LABELS = {
+    "A": "全量Schema 无知识",
+    "B": "全量Schema 有知识",
+    "C": "Schema Linking 无知识",
+    "D": "Schema Linking 有知识",
+    "E": "全量Schema + Few-shot",
+    "F": "全量Schema + Few-shot + 知识",
+}
 
-def _extract_keywords(text: str) -> set:
-    """中文+英文关键词提取"""
-    kw = set()
-    for m in re.finditer(r'[\u4e00-\u9fff]{2,6}', text):
-        kw.add(m.group())
-    for m in re.finditer(r'[A-Za-z_][A-Za-z0-9_]+', text):
-        kw.add(m.group().lower())
-    return kw
+SYSTEM_PROMPT = """你是一个电信网络管理系统的 SQL 专家。根据给定的数据库 Schema 和用户问题，生成一条精确的 SQL 查询语句。
 
-
-def _expand_keywords(question: str) -> set:
-    """关键词 + 领域同义词扩展 + KPI 表推断"""
-    base = _extract_keywords(question)
-    for m in re.finditer(r'[A-Za-z_][A-Za-z0-9_]+', question):
-        base.add(m.group().lower())
-    expanded = set(base)
-    for term, synonyms in DOMAIN_SYNONYMS.items():
-        if term in question or term.lower() in question.lower():
-            expanded.update(s.lower() for s in synonyms)
-    if any(w in question for w in ["CPU", "内存", "温度", "告警", "功耗", "风扇", "BGP"]):
-        expanded.update(["t_ne_perf_kpi", "ne_perf", "kpi"])
-    if any(w in question for w in ["带宽", "接口", "端口", "CRC", "丢弃", "错误包", "利用率"]):
-        expanded.update(["t_interface_perf_kpi", "interface_perf", "kpi"])
-    if any(w in question for w in ["隧道时延", "隧道抖动", "隧道SLA", "路径切换"]):
-        expanded.update(["t_tunnel_perf_kpi", "tunnel_perf", "kpi"])
-    if any(w in question for w in ["SLA达标", "SLA违规", "MOS", "可用率", "e2e", "达标率"]):
-        expanded.update(["t_vpn_sla_kpi", "vpn_sla", "kpi"])
-    return expanded
+要求：
+- 只输出一条 SQL，不要解释
+- 使用标准 SQL 语法
+- 表名和列名严格按 Schema 中的定义
+- 适当使用 ORDER BY 使结果有意义
+- 浮点数用 ROUND() 保留合理精度
+- 不要用 SELECT *，明确列出需要的列"""
 
 
-def build_schema_index(mdl: dict) -> dict:
-    """构建 table→keywords 索引 + FK 图"""
-    index = {}
-    fk_graph = {}
-    for model in mdl.get("models", []):
-        name = model["name"]
-        desc = model.get("properties", {}).get("description", "")
-        keywords = _extract_keywords(desc)
-        keywords.add(name.lower())
-        for col in model.get("columns", []):
-            keywords.add(col["name"].lower())
-            col_desc = col.get("properties", {}).get("description", "")
-            keywords.update(_extract_keywords(col_desc))
-            if "取值:" in col_desc:
-                for v in col_desc.split("取值:")[-1].strip().split(";"):
-                    if v.strip():
-                        keywords.add(v.strip().lower())
-        index[name] = keywords
-        fk_graph[name] = set()
-    for rel in mdl.get("relationships", []):
-        cond = rel.get("condition", "")
-        tables_in_rel = [m["name"] for m in mdl["models"] if m["name"] in cond]
-        for i, t1 in enumerate(tables_in_rel):
-            for t2 in tables_in_rel[i+1:]:
-                fk_graph.setdefault(t1, set()).add(t2)
-                fk_graph.setdefault(t2, set()).add(t1)
-    return {"index": index, "fk_graph": fk_graph}
+def extract_sql(text: str) -> str:
+    """从 LLM 回复中提取 SQL"""
+    m = re.search(r'```sql\s*(.*?)```', text, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r'```\s*(.*?)```', text, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    return text.strip()
 
 
-def select_tables(question: str, schema_index: dict, top_k: int = 6) -> list[str]:
-    """Phase A2: 表选择"""
-    q_kw = _expand_keywords(question)
-    scores = {}
-    for table, t_kw in schema_index["index"].items():
-        scores[table] = len(q_kw & t_kw)
-    sorted_t = sorted(scores.items(), key=lambda x: -x[1])
-    primary = [t for t, s in sorted_t if s > 0][:3]
-    expanded = set(primary)
-    for t in primary:
-        for neighbor in schema_index["fk_graph"].get(t, set()):
-            expanded.add(neighbor)
-    result = sorted(expanded, key=lambda t: -scores.get(t, 0))[:top_k]
-    return result if result else [sorted_t[0][0]] if sorted_t else []
-
-
-def select_columns(question: str, tables: list[str], mdl: dict) -> dict[str, list[str]]:
-    """Phase A3: 列裁剪 — 保留匹配列 + PK + FK + 状态列 + 时间列"""
-    q_kw = _expand_keywords(question)
-    ALWAYS_KEEP = {"admin_status", "oper_status", "created_at", "updated_at", "collect_time",
-                   "ne_id", "site_id", "if_id", "board_id", "link_id", "tunnel_id",
-                   "vpn_id", "vrf_id", "policy_id", "binding_id", "kpi_id",
-                   "customer_id", "customer_name"}
-    result = {}
-    for model in mdl.get("models", []):
-        if model["name"] not in tables:
-            continue
-        pk = model.get("primaryKey", "")
-        kept = set()
-        for col in model.get("columns", []):
-            cn = col["name"]
-            # 总是保留 PK、FK、状态列
-            if cn == pk or cn in ALWAYS_KEEP:
-                kept.add(cn)
-                continue
-            # 列名或列描述匹配问题关键词
-            col_kw = _extract_keywords(col.get("properties", {}).get("description", ""))
-            col_kw.add(cn.lower())
-            if q_kw & col_kw:
-                kept.add(cn)
-        result[model["name"]] = sorted(kept)
-    return result
-
-
-def detect_join_paths(tables: list[str], mdl: dict) -> list[str]:
-    """Phase A4: 从 FK 关系推导 JOIN 路径提示"""
-    paths = []
-    for rel in mdl.get("relationships", []):
-        cond = rel.get("condition", "")
-        involved = [t for t in tables if t in cond]
-        if len(involved) >= 2:
-            desc = rel.get("properties", {}).get("description", "")
-            paths.append(f"JOIN: {cond}" + (f"  -- {desc}" if desc else ""))
-    return paths
-
-
-def detect_query_pattern(question: str) -> str | None:
-    """Phase A5: 查询模式识别"""
-    patterns = {
-        "AGGREGATION": ["统计", "汇总", "总数", "数量", "求和", "平均"],
-        "RANKING": ["排名", "前N", "前5", "前10", "前三", "最高", "最低", "最大", "最小", "Top"],
-        "TREND": ["趋势", "每日", "每天", "环比", "增长", "变化", "对比上周"],
-        "DISTRIBUTION": ["分布", "分桶", "空闲", "正常", "繁忙", "过载"],
-        "THRESHOLD": ["超过", "低于", "大于", "小于", "超出", "不达标"],
-        "EXISTENCE": ["没有", "不存在", "未启用", "未创建", "缺少"],
-        "COMPOSITE": ["健康分", "压力指数", "风险", "评分"],
-    }
-    detected = []
-    for pattern, keywords in patterns.items():
-        if any(kw in question for kw in keywords):
-            detected.append(pattern)
-    return "+".join(detected) if detected else None
-
-
-# ─── Few-shot 检索（DAIL-SQL 风格：TF-IDF 相似度 + SQL 骨架多样性重排）───
-
-FEW_SHOT_PATH = PROJECT_ROOT / "eval" / "few_shot_pairs.json"
-
-
-def _extract_sql_skeleton(sql: str) -> str:
-    """用 sqlglot 提取 SQL 骨架：保留结构关键词，替换具体表/列/值为占位符"""
-    try:
-        import sqlglot
-        parsed = sqlglot.parse_one(sql, dialect="duckdb")
-        # 提取结构特征
-        features = []
-        sql_upper = sql.upper()
-        for kw in ["SELECT", "FROM", "WHERE", "JOIN", "LEFT JOIN", "GROUP BY",
-                    "HAVING", "ORDER BY", "LIMIT", "WITH", "UNION",
-                    "COUNT", "AVG", "SUM", "MAX", "MIN", "ROUND",
-                    "CASE", "ROW_NUMBER", "LAG", "LEAD", "RANK",
-                    "IN", "EXISTS", "NOT", "LIKE", "BETWEEN", "DISTINCT"]:
-            if kw in sql_upper:
-                features.append(kw)
-        # 统计 JOIN 数量
-        join_count = sql_upper.count(" JOIN ")
-        if join_count > 0:
-            features.append(f"JOIN×{join_count}")
-        # CTE 数量
-        cte_count = sql_upper.count(" AS (")
-        if cte_count > 0:
-            features.append(f"CTE×{cte_count}")
-        return "|".join(sorted(set(features)))
-    except Exception:
-        return sql[:50]
-
-
-OLLAMA_URL = "http://localhost:11434/api/embeddings"
-EMBED_MODEL = "nomic-embed-text"
-
-
-def _get_embedding(text: str) -> list[float]:
-    """调用 Ollama 获取文本 embedding"""
+def call_openai_compatible(api_base: str, model: str, api_key: str,
+                            system: str, user: str, timeout: int = 120) -> str:
+    """调用 OpenAI 兼容 API"""
     import urllib.request
+    url = f"{api_base.rstrip('/')}/chat/completions"
+    payload = {
+        "model": model.split("/", 1)[-1] if "/" in model else model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "max_tokens": 2000,
+        "temperature": 0,
+    }
     req = urllib.request.Request(
-        OLLAMA_URL,
-        data=json.dumps({"model": EMBED_MODEL, "prompt": text}).encode(),
+        url,
+        data=json.dumps(payload).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read())
+    return data["choices"][0]["message"]["content"]
+
+
+def call_ollama(model: str, system: str, user: str, timeout: int = 120) -> str:
+    """调用 Ollama API"""
+    import urllib.request
+    url = "http://localhost:11434/api/chat"
+    payload = {
+        "model": model.split("/", 1)[-1] if "/" in model else model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "stream": False,
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read())["embedding"]
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read())
+    return data["message"]["content"]
 
 
-def _cosine_sim(a: list[float], b: list[float]) -> float:
-    """余弦相似度"""
-    import math
-    dot = sum(x * y for x, y in zip(a, b))
-    na = math.sqrt(sum(x * x for x in a)) or 1.0
-    nb = math.sqrt(sum(x * x for x in b)) or 1.0
-    return dot / (na * nb)
-
-
-def load_few_shot_index() -> dict | None:
-    """加载 few-shot 库，预计算 embedding 和 SQL 骨架"""
-    if not FEW_SHOT_PATH.exists():
-        return None
-    with open(FEW_SHOT_PATH) as f:
-        pairs = json.load(f)
-
-    # 预计算 embedding 和 SQL 骨架
-    # embedding 缓存文件，避免重复调用
-    cache_path = FEW_SHOT_PATH.parent / ".generated" / "few_shot_embeddings.json"
-    cached = {}
-    if cache_path.exists():
-        with open(cache_path) as f:
-            cached = json.load(f)
-
-    updated = False
-    for p in pairs:
-        p["_skeleton"] = _extract_sql_skeleton(p["sql"])
-        if p["id"] in cached:
-            p["_embedding"] = cached[p["id"]]
-        else:
-            print(f"  Computing embedding for {p['id']}...")
-            p["_embedding"] = _get_embedding(p["question"])
-            cached[p["id"]] = p["_embedding"]
-            updated = True
-
-    if updated:
-        cache_path.parent.mkdir(exist_ok=True)
-        with open(cache_path, "w") as f:
-            json.dump(cached, f)
-
-    # 同时保留关键词索引作为 fallback
-    for p in pairs:
-        p["_keywords"] = _expand_keywords(p["question"])
-
-    return {"pairs": pairs}
-
-
-def retrieve_few_shot(question: str, fs_index: dict, top_k: int = 3) -> list[dict]:
-    """Phase A6: Embedding 相似度 top 候选 + SQL 骨架多样性重排"""
-    pairs = fs_index["pairs"]
-
-    # Step 1: Embedding 余弦相似度，取 top 10 候选
-    try:
-        q_emb = _get_embedding(question)
-        scored = [(
-            _cosine_sim(q_emb, p["_embedding"]),
-            p
-        ) for p in pairs]
-    except Exception:
-        # Ollama 不可用时 fallback 到关键词匹配
-        q_kw = _expand_keywords(question)
-        scored = []
-        for p in pairs:
-            overlap = len(q_kw & p["_keywords"])
-            union = len(q_kw | p["_keywords"])
-            scored.append((overlap / union if union > 0 else 0, p))
-
-    scored.sort(key=lambda x: -x[0])
-    candidates = scored[:10]
-
-    if not candidates:
-        return []
-
-    # Step 2: SQL 骨架多样性贪心重排
-    selected = [candidates[0]]
-    used_skeletons = {candidates[0][1]["_skeleton"]}
-
-    for _ in range(top_k - 1):
-        best = None
-        best_score = -1
-        for sim, p in candidates:
-            if any(p["id"] == s[1]["id"] for s in selected):
-                continue
-            diversity_bonus = 0.3 if p["_skeleton"] not in used_skeletons else 0
-            combined = sim + diversity_bonus
-            if combined > best_score:
-                best_score = combined
-                best = (sim, p)
-        if best:
-            selected.append(best)
-            used_skeletons.add(best[1]["_skeleton"])
-
-    return [{"question": s[1]["question"], "sql": s[1]["sql"]} for s in selected]
-
-
-# ─── 完整 Pipeline ───
-
-def run_pipeline(question: str, mdl: dict, schema_index: dict,
-                 use_schema_linking: bool, knowledge: str | None,
-                 few_shot_examples: list[dict] | None = None) -> dict:
-    """运行完整预处理 pipeline，返回组装好的 prompt 上下文"""
-    result = {"question": question}
-
-    if use_schema_linking:
-        # Phase A2: 表选择
-        tables = select_tables(question, schema_index)
-        result["selected_tables"] = tables
-
-        # Phase A3: 列裁剪
-        col_filter = select_columns(question, tables, mdl)
-        result["column_filter"] = {t: len(cols) for t, cols in col_filter.items()}
-
-        # Phase A4: JOIN 路径
-        join_paths = detect_join_paths(tables, mdl)
-        result["join_paths"] = join_paths
-
-        # 生成精简 DDL
-        ddl = mdl_to_ddl(mdl, tables_filter=tables, columns_filter=col_filter)
+def generate_sql(model: str, api_base: str, api_key: str,
+                  user_prompt: str, timeout: int = 120) -> str:
+    """根据模型前缀选择调用方式"""
+    if model.startswith("ollama/"):
+        text = call_ollama(model, SYSTEM_PROMPT, user_prompt, timeout)
     else:
-        ddl = mdl_to_ddl(mdl)
-        result["selected_tables"] = [m["name"] for m in mdl["models"]]
-
-    # Phase A5: 查询模式识别
-    pattern = detect_query_pattern(question)
-    result["query_pattern"] = pattern
-
-    # Phase B: Prompt 组装
-    prompt_parts = [f"### DATABASE SCHEMA ###\n{ddl}"]
-
-    if use_schema_linking and join_paths:
-        prompt_parts.append("### JOIN PATHS ###\n" + "\n".join(join_paths))
-
-    if few_shot_examples:
-        fs_lines = []
-        for sample in few_shot_examples:
-            fs_lines.append(f"Question:\n{sample['question']}\nSQL:\n{sample['sql']}")
-        prompt_parts.append("### SQL SAMPLES ###\n" + "\n\n".join(fs_lines))
-        result["few_shot_count"] = len(few_shot_examples)
-
-    if pattern:
-        prompt_parts.append(f"### QUERY PATTERN ###\n检测到的查询模式: {pattern}")
-
-    if knowledge:
-        prompt_parts.append(f"### DOMAIN KNOWLEDGE ###\n{knowledge}")
-
-    prompt_parts.append(f"### QUESTION ###\n{question}")
-
-    result["user_prompt"] = "\n\n".join(prompt_parts)
-    result["ddl_chars"] = len(ddl)
-
-    return result
+        text = call_openai_compatible(api_base, model, api_key, SYSTEM_PROMPT, user_prompt, timeout)
+    return extract_sql(text)
 
 
-# ─── 主流程：生成 6 组预处理数据 ───
+def run_config(model: str, api_base: str, api_key: str, config: str,
+               timeout: int, max_retries: int, q_range: tuple | None = None) -> dict:
+    """运行一个配置的全部题目，支持断点续跑"""
+    config_name = CONFIG_NAMES[config]
+    prompt_path = GENERATED_DIR / f"prompts_{config_name}.json"
+    if not prompt_path.exists():
+        print(f"  [SKIP] {prompt_path.name} not found")
+        return {}
 
-def main():
-    mdl = load_mdl()
-    schema_index = build_schema_index(mdl)
-    fs_index = load_few_shot_index()
+    with open(prompt_path) as f:
+        data = json.load(f)
+    prompts = data["prompts"]
 
-    with open(TEST_PATH) as f:
-        cases = json.load(f)
+    # 题目范围过滤
+    if q_range:
+        start, end = q_range
+        prompts = {k: v for k, v in prompts.items()
+                   if start <= int(k[1:]) <= end}
 
-    configs = {
-        "A": {"schema_linking": False, "knowledge": False, "few_shot": False, "name": "fullschema_no_knowledge"},
-        "B": {"schema_linking": False, "knowledge": True,  "few_shot": False, "name": "fullschema_with_knowledge"},
-        "C": {"schema_linking": True,  "knowledge": False, "few_shot": False, "name": "schemalink_no_knowledge"},
-        "D": {"schema_linking": True,  "knowledge": True,  "few_shot": False, "name": "schemalink_with_knowledge"},
-        "E": {"schema_linking": False, "knowledge": False, "few_shot": True,  "name": "fullschema_fewshot"},
-        "F": {"schema_linking": False, "knowledge": True,  "few_shot": True,  "name": "fullschema_fewshot_knowledge"},
-    }
+    # 断点续跑：加载进度
+    model_short = model.split("/")[-1].replace(":", "_")
+    progress_path = GENERATED_DIR / f"progress_{model_short}_{config}.json"
+    done = {}
+    if progress_path.exists():
+        with open(progress_path) as f:
+            done = json.load(f)
+        print(f"  从断点恢复: {len(done)} 题已完成")
 
-    # 生成 questions_only（无 expected_sql）→ .generated/
-    gen_dir = PROJECT_ROOT / "eval" / ".generated"
-    gen_dir.mkdir(exist_ok=True)
-    questions_only = [{k: c[k] for k in ["id", "difficulty", "question", "implicit_knowledge"]} for c in cases]
-    with open(gen_dir / "questions_only.json", "w") as f:
-        json.dump(questions_only, f, ensure_ascii=False, indent=2)
+    # 统计
+    total = len(prompts)
+    success = sum(1 for v in done.values() if not v.startswith("-- ERROR"))
+    errors = []
 
-    # 为每组配置生成 per-question prompt
-    for cfg_key, cfg in configs.items():
-        if cfg["few_shot"] and not fs_index:
-            print(f"[{cfg_key}] SKIP — few_shot_pairs.json not found")
+    for i, (qid, info) in enumerate(sorted(prompts.items()), 1):
+        if qid in done:
             continue
 
-        prompts = {}
-        stats = {"total_ddl_chars": 0, "avg_tables": 0}
-        for c in cases:
-            qid = c["id"]
-            knowledge = c["implicit_knowledge"] if cfg["knowledge"] else None
-            fs_examples = retrieve_few_shot(c["question"], fs_index) if cfg["few_shot"] else None
-            result = run_pipeline(c["question"], mdl, schema_index, cfg["schema_linking"], knowledge, fs_examples)
-            prompts[qid] = {
-                "user_prompt": result["user_prompt"],
-                "selected_tables": result["selected_tables"],
-                "query_pattern": result["query_pattern"],
-                "ddl_chars": result["ddl_chars"],
-            }
-            if cfg["few_shot"]:
-                prompts[qid]["few_shot_count"] = result.get("few_shot_count", 0)
-            stats["total_ddl_chars"] += result["ddl_chars"]
-            stats["avg_tables"] += len(result["selected_tables"])
+        retries = 0
+        while retries <= max_retries:
+            try:
+                sql = generate_sql(model, api_base, api_key, info["user_prompt"], timeout)
+                done[qid] = sql
+                success += 1
+                print(f"  {qid} ({i}/{total}) ✓")
+                break
+            except Exception as e:
+                retries += 1
+                err_msg = str(e)[:100]
+                if retries <= max_retries:
+                    wait = min(retries * 5, 30)
+                    print(f"  {qid} ({i}/{total}) 重试 {retries}/{max_retries} (等待{wait}s) — {err_msg}")
+                    time.sleep(wait)
+                else:
+                    done[qid] = f"-- ERROR: {e}"
+                    errors.append({"qid": qid, "error": err_msg})
+                    print(f"  {qid} ({i}/{total}) ✗ 放弃 — {err_msg}")
 
-        stats["avg_tables"] = round(stats["avg_tables"] / len(cases), 1)
-        stats["avg_ddl_chars"] = round(stats["total_ddl_chars"] / len(cases))
+        # 每题保存进度
+        with open(progress_path, "w") as f:
+            json.dump(done, f, ensure_ascii=False, indent=2)
 
-        output = {
-            "_meta": {
-                "config": cfg_key,
-                "name": cfg["name"],
-                "schema_linking": cfg["schema_linking"],
-                "knowledge": cfg["knowledge"],
-                "few_shot": cfg["few_shot"],
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "stats": stats,
-            },
-            "prompts": prompts,
-        }
-        path = gen_dir / f"prompts_{cfg['name']}.json"
-        with open(path, "w") as f:
-            json.dump(output, f, ensure_ascii=False, indent=2)
-        label = f"avg {stats['avg_tables']} tables, {stats['avg_ddl_chars']} chars/prompt"
-        if cfg["few_shot"]:
-            label += ", +few-shot"
-        print(f"[{cfg_key}] {cfg['name']}: {label} → {path.name}")
+    # 完成后删除进度文件
+    if progress_path.exists():
+        progress_path.unlink()
 
-    # 生成 full DDL 文件 → .generated/
-    full_ddl = mdl_to_ddl(mdl)
-    with open(gen_dir / "full_ddl.sql", "w") as f:
-        f.write(full_ddl)
-    print(f"\nfull_ddl.sql: {len(full_ddl)} chars")
+    return {"results": done, "errors": errors, "success": success, "total": total}
+
+
+def save_to_all_sqls(results: dict, model: str, config: str, label: str):
+    """追加结果到 all_sqls.json"""
+    sqls_path = RESULTS_DIR / "all_sqls.json"
+    with open(sqls_path) as f:
+        all_data = json.load(f)
+
+    config_name = CONFIG_NAMES[config]
+    model_short = model.split("/")[-1]
+    all_data["experiments"].append({
+        "label": label,
+        "model": model_short,
+        "schema": "full" if "fullschema" in config_name else "schemalink",
+        "few_shot": "fewshot" in config_name,
+        "knowledge": "knowledge" in config_name,
+        "generated_at": datetime.now().strftime("%Y-%m-%d"),
+    })
+
+    for qid in sorted(all_data["sqls"].keys()):
+        all_data["sqls"][qid][label] = results.get(qid, "")
+
+    with open(sqls_path, "w") as f:
+        json.dump(all_data, f, ensure_ascii=False, indent=2)
+
+    return len(all_data["experiments"]) - 1
+
+
+def main():
+    parser = argparse.ArgumentParser(description="批量调用 LLM 生成 SQL")
+    parser.add_argument("--model", required=True, help="模型名 (如 openai/qwen3-32b, ollama/qwen3:8b)")
+    parser.add_argument("--api-base", default="http://localhost:8000/v1", help="OpenAI 兼容 API 地址")
+    parser.add_argument("--api-key", default="none", help="API key")
+    parser.add_argument("--all", action="store_true", help="全量跑 6 组配置 (A-F)")
+    parser.add_argument("--prompt-config", choices=list(CONFIG_NAMES.keys()), help="Prompt 配置 (A-F)")
+    parser.add_argument("--label", default=None, help="实验标签（--all 模式自动生成）")
+    parser.add_argument("--range", default=None, help="题目范围 (如 Q01-Q10)")
+    parser.add_argument("--timeout", type=int, default=120, help="单题超时秒数 (默认 120)")
+    parser.add_argument("--max-retries", type=int, default=3, help="单题最大重试次数 (默认 3)")
+    args = parser.parse_args()
+
+    if not args.all and not args.prompt_config:
+        parser.error("必须指定 --all 或 --prompt-config")
+
+    # 解析题目范围
+    q_range = None
+    if args.range:
+        m = re.match(r'Q(\d+)-Q(\d+)', args.range)
+        if m:
+            q_range = (int(m.group(1)), int(m.group(2)))
+
+    # 确定要跑的配置
+    configs = list(CONFIG_NAMES.keys()) if args.all else [args.prompt_config]
+    model_short = args.model.split("/")[-1]
+
+    print(f"{'=' * 60}")
+    print(f"模型: {args.model}")
+    print(f"配置: {', '.join(configs)}")
+    print(f"超时: {args.timeout}s/题, 重试: {args.max_retries}次")
+    print(f"开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"{'=' * 60}")
+
+    all_errors = []
+    exp_indices = []
+
+    for config in configs:
+        label = args.label if args.label else f"{model_short} {CONFIG_LABELS[config]}"
+
+        print(f"\n{'─' * 60}")
+        print(f"[{config}] {label}")
+        print(f"{'─' * 60}")
+
+        result = run_config(args.model, args.api_base, args.api_key,
+                            config, args.timeout, args.max_retries, q_range)
+        if not result:
+            continue
+
+        exp_idx = save_to_all_sqls(result["results"], args.model, config, label)
+        exp_indices.append(exp_idx)
+
+        print(f"  成功: {result['success']}/{result['total']}")
+        if result["errors"]:
+            print(f"  失败: {len(result['errors'])} 题")
+            all_errors.extend(result["errors"])
+
+    # 汇总
+    print(f"\n{'=' * 60}")
+    print(f"全部完成: {len(exp_indices)} 组实验")
+    print(f"结束时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    if all_errors:
+        print(f"\n失败记录 ({len(all_errors)} 题):")
+        for e in all_errors:
+            print(f"  {e['qid']}: {e['error']}")
+    if exp_indices:
+        idx_str = " ".join(str(i) for i in exp_indices)
+        print(f"\n下一步: python eval/scripts/run_eval.py --exp {idx_str}")
 
 
 if __name__ == "__main__":

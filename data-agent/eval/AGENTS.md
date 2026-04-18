@@ -13,8 +13,8 @@ eval/
 ├── few_shot_pairs.json          # 源数据：43条few-shot示例（提交）
 │
 ├── scripts/                     # 脚本（提交）
-│   ├── generate_sqls.py         #   生成 prompt（6组配置）
-│   ├── generate_with_llm.py     #   调用 LLM API 生成 SQL（用于非 Claude Code 环境）
+│   ├── generate_prompts.py      #   生成 6 组 Prompt 文件
+│   ├── generate_sqls.py         #   调用 LLM API 生成 SQL（用于非 Claude Code 环境）
 │   ├── eval_framework.py        #   SQL 执行 + 多维评分引擎
 │   ├── run_eval.py              #   评测 + 报告
 │   ├── run_all.py               #   一键评测（生成 prompt + 评测 + 报告）
@@ -26,11 +26,11 @@ eval/
 │   └── bad_case_analysis.md     #   错题分析（人工/Agent 分析产出）
 │
 └── .generated/                  # 脚本生成物（不提交、不删除）
-    ├── prompts_*.json           #   generate_sqls.py 生成
+    ├── prompts_*.json           #   generate_prompts.py 生成
     ├── eval_results_*.json      #   run_eval.py 生成（每题详细评分）
     ├── few_shot_embeddings.json #   few-shot embedding 缓存
-    ├── full_ddl.sql             #   generate_sqls.py 生成
-    └── questions_only.json      #   generate_sqls.py 生成
+    ├── full_ddl.sql             #   generate_prompts.py 生成
+    └── questions_only.json      #   generate_prompts.py 生成
 ```
 
 ### 文件分类规则
@@ -53,7 +53,7 @@ eval/
 # 评测 all_sqls.json 中所有实验，输出报告
 python eval/scripts/run_all.py
 
-# 先重新生成 prompt 再评测
+# 先重新生成 6 组 prompt 再评测
 python eval/scripts/run_all.py --regen
 
 # 只评测指定实验（按索引）
@@ -63,18 +63,17 @@ python eval/scripts/run_all.py --exp 0 4 8
 ### 分步操作
 
 ```bash
-# Step 1: 生成 prompt（6组配置 → .generated/prompts_*.json）
-python eval/scripts/generate_sqls.py
+# Step 1: 生成 6 组 Prompt 文件 → .generated/prompts_*.json
+python eval/scripts/generate_prompts.py
 
 # Step 2a: 用 Claude Code sub-agent 生成 SQL（Mac 本地）
 #   → 见下方「SQL 生成方式」章节
 
 # Step 2b: 用 LLM API 生成 SQL（公司环境 / 其他模型）
-python eval/scripts/generate_with_llm.py \
+python eval/scripts/generate_sqls.py \
   --model openai/qwen3-32b \
   --api-base http://10.220.239.55:8000/v1 \
-  --prompt-config E \
-  --label "Qwen3-32B + Few-shot"
+  --all
 
 # Step 3: 评测 + 报告
 python eval/scripts/run_eval.py              # 全部
@@ -88,10 +87,10 @@ python eval/scripts/verify_few_shot.py
 
 | 脚本 | 做什么 | 输入 | 输出 |
 |------|--------|------|------|
-| `generate_sqls.py` | 为 100 题生成 6 组 LLM Prompt 文件 | MDL + 评测集 + few-shot 库 | `.generated/prompts_*.json` (6个) |
-| `generate_with_llm.py` | 调用 LLM API 逐题生成 SQL | `.generated/prompts_{config}.json` + LLM API | `results/all_sqls.json`（追加） |
+| `generate_prompts.py` | 为 100 题生成 6 组 Prompt 文件 | MDL + 评测集 + few-shot 库 | `.generated/prompts_*.json` (6个) |
+| `generate_sqls.py` | 调用 LLM API 逐题生成 SQL | `.generated/prompts_{config}.json` + LLM API | `results/all_sqls.json`（追加） |
 | `run_eval.py` | 对比生成 SQL 与期望 SQL 的执行结果 | `results/all_sqls.json` + 评测集 + DuckDB | `results/report_*.md` + `.generated/eval_results_*.json` |
-| `run_all.py` | 一键组合（generate_sqls + run_eval） | 同上 | 同上 |
+| `run_all.py` | 一键组合（generate_prompts + run_eval） | 同上 | 同上 |
 | `verify_few_shot.py` | 验证 few-shot SQL 在 DuckDB 上可执行 | `few_shot_pairs.json` + DuckDB | 终端：逐条 pass/fail |
 
 ---
@@ -103,7 +102,7 @@ python eval/scripts/verify_few_shot.py
 不调外部 API，直接用 Claude Code 的 Agent 工具派 sub-agent 生成。
 
 **操作步骤：**
-1. 跑 `generate_sqls.py` 生成 prompt 文件
+1. 跑 `generate_prompts.py` 生成 prompt 文件
 2. 派 sub-agent 读取 prompt 文件，逐题生成 SQL
 3. 将结果合并追加到 `results/all_sqls.json`
 
@@ -133,28 +132,28 @@ SQL 要求：
 
 ### 方式 B：LLM API 脚本（公司环境 / 其他模型）
 
-用 `generate_with_llm.py` 调用 OpenAI 兼容 API 或 Ollama。
+用 `generate_sqls.py` 调用 OpenAI 兼容 API 或 Ollama。
 
 ```bash
 # 全量跑 6 组配置（挂机模式，适合过夜）
-python eval/scripts/generate_with_llm.py \
+python eval/scripts/generate_sqls.py \
   --model openai/qwen3-32b \
   --api-base http://10.220.239.55:8000/v1 \
   --all
 
 # 只跑一个配置
-python eval/scripts/generate_with_llm.py \
+python eval/scripts/generate_sqls.py \
   --model openai/qwen3-32b \
   --api-base http://10.220.239.55:8000/v1 \
   --prompt-config E
 
 # Ollama 本地模型
-python eval/scripts/generate_with_llm.py \
+python eval/scripts/generate_sqls.py \
   --model ollama/qwen3:8b \
   --prompt-config E
 
 # 调试：只跑 10 题
-python eval/scripts/generate_with_llm.py \
+python eval/scripts/generate_sqls.py \
   --model ollama/qwen3:8b \
   --prompt-config E \
   --range Q01-Q10
@@ -173,7 +172,7 @@ python eval/scripts/generate_with_llm.py \
 
 ## 四、实验配置
 
-### Prompt 配置（generate_sqls.py 生成）
+### Prompt 配置（generate_prompts.py 生成）
 
 | 配置 | Schema 策略 | Few-shot | 知识注入 | 对应 prompt 文件 |
 |------|------------|----------|---------|-----------------|
@@ -280,15 +279,15 @@ python eval/scripts/generate_with_llm.py \
 
 | 判定 | 含义 |
 |------|------|
-| correct | 行数相同，且值匹配（精确匹配 / 列交集匹配 / 值子集匹配，三级递进） |
+| correct | 行数相同，且值匹配（精确匹配 / 子集匹配 / 列交集匹配，三级递进） |
 | wrong | 行数不同，或值不匹配 |
 | error | SQL 执行失败 |
 | unverifiable | 双方均返回 0 行，无法判断 |
 
 **三级匹配机制（代码中依次尝试）：**
 1. **精确匹配**：值元组集合完全一致
-2. **列交集匹配**：取两侧共有列名，只比交集列的值（共有列值必须完全一致）
-3. **值子集匹配**：一侧值为另一侧子集（兜底，列完全不同时）
+2. **子集匹配**：一侧值为另一侧子集（容忍列多/少）
+3. **列交集匹配**：取两侧共有列名，只比交集列的值（共有列值必须完全一致）
 
 ### 三种准确率指标
 
@@ -296,7 +295,7 @@ python eval/scripts/generate_with_llm.py \
 |------|---------|------|
 | 严格匹配 | 精确匹配通过数 / 总数 | 最保守，列名+值+行数全部相同 |
 | 子集匹配 | (精确+子集)通过数 / 总数 | 容忍列多/少 |
-| 列交集匹配 | (精确+交集+子集)通过数 / 总数 | 最宽松，只比共有列 |
+| 列交集匹配 | (精确+子集+交集)通过数 / 总数 | 最宽松，只比共有列 |
 
 ### 多维组件评分（5 维度）
 
@@ -351,11 +350,11 @@ pip install duckdb sqlglot pyyaml
 ### 一键复测流程
 
 ```bash
-# 1. 生成 prompt
-python eval/scripts/generate_sqls.py
+# 1. 生成 6 组 Prompt 文件
+python eval/scripts/generate_prompts.py
 
 # 2. 全量跑 6 组配置（挂机过夜，约 2-3 小时）
-python eval/scripts/generate_with_llm.py \
+python eval/scripts/generate_sqls.py \
   --model openai/qwen3-32b \
   --api-base http://10.220.239.55:8000/v1 \
   --all
