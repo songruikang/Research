@@ -133,9 +133,31 @@ def compare_results(generated: dict, expected: dict) -> dict:
     exp_set = set(tuple(str(v) for v in row) for row in expected["rows"])
 
     if gen_set == exp_set:
-        return {"match": True, "verdict": "correct", "reason": "完全匹配"}
+        return {"match": True, "verdict": "correct", "match_level": "exact", "reason": "完全匹配"}
 
-    # 2. 列交集比对：取两侧共有列，只比交集列的值
+    # 2. 子集匹配：行数相同时，检查值子集关系
+    subset_matched = False
+    if gen_rows > 0:
+        matched_rows = 0
+        for exp_row in expected["rows"]:
+            exp_vals = set(str(v) for v in exp_row if v is not None and str(v).strip())
+            for gen_row in generated["rows"]:
+                gen_vals = set(str(v) for v in gen_row if v is not None and str(v).strip())
+                if exp_vals <= gen_vals or gen_vals <= exp_vals:
+                    matched_rows += 1
+                    break
+        if matched_rows == exp_rows:
+            subset_matched = True
+
+    if subset_matched:
+        return {
+            "match": True,
+            "verdict": "correct",
+            "match_level": "subset",
+            "reason": f"值子集匹配({gen_rows}行){col_diff_note}",
+        }
+
+    # 3. 列交集比对：取两侧共有列，只比交集列的值
     common_cols = [c for c in exp_cols if c in gen_cols]
     if common_cols:
         gen_col_idx = [gen_cols.index(c) for c in common_cols]
@@ -154,24 +176,8 @@ def compare_results(generated: dict, expected: dict) -> dict:
             return {
                 "match": True,
                 "verdict": "correct",
+                "match_level": "intersection",
                 "reason": f"交集列匹配({len(common_cols)}列, {gen_rows}行){col_diff_note}",
-            }
-
-    # 3. 子集匹配：列完全不同时（无交集），用值子集关系判断
-    if gen_rows > 0:
-        matched_rows = 0
-        for exp_row in expected["rows"]:
-            exp_vals = set(str(v) for v in exp_row if v is not None and str(v).strip())
-            for gen_row in generated["rows"]:
-                gen_vals = set(str(v) for v in gen_row if v is not None and str(v).strip())
-                if exp_vals <= gen_vals or gen_vals <= exp_vals:
-                    matched_rows += 1
-                    break
-        if matched_rows == exp_rows:
-            return {
-                "match": True,
-                "verdict": "correct",
-                "reason": f"值子集匹配({gen_rows}行){col_diff_note}",
             }
 
     # 4. 不匹配
@@ -562,6 +568,7 @@ def run_evaluation(test_cases: list, generated_sqls: dict, db_path: str) -> dict
             "executable": gen_result["ok"],
             "correct": comparison["match"],
             "verdict": verdict,
+            "match_level": comparison.get("match_level"),
             "reason": comparison["reason"],
             "generated_sql": gen_sql,
             "expected_sql": case["expected_sql"],
@@ -584,6 +591,11 @@ def run_evaluation(test_cases: list, generated_sqls: dict, db_path: str) -> dict
     verifiable = total - unverifiable
     pct = lambda n, d: f"{100*n/d:.0f}%" if d > 0 else "N/A"
 
+    # 三级匹配分别统计
+    exact = sum(1 for r in results if r.get("match_level") == "exact")
+    subset = sum(1 for r in results if r.get("match_level") in ("exact", "subset"))
+    intersection = correct  # 三级都算 correct
+
     # 组件评分汇总
     scored = [r for r in results if r["component_scores"]]
     avg_scores = {}
@@ -603,8 +615,9 @@ def run_evaluation(test_cases: list, generated_sqls: dict, db_path: str) -> dict
             "wrong": wrong,
             "error": error,
             "exec_rate": f"{executable}/{total} ({pct(executable, total)})",
-            "accuracy": f"{correct}/{total} ({pct(correct, total)})",
-            "accuracy_verifiable": f"{correct}/{verifiable} ({pct(correct, verifiable)})" if verifiable > 0 else "N/A",
+            "accuracy_exact": f"{exact}/{total} ({pct(exact, total)})",
+            "accuracy_subset": f"{subset}/{total} ({pct(subset, total)})",
+            "accuracy_intersection": f"{intersection}/{total} ({pct(intersection, total)})",
             "unverifiable_rate": f"{unverifiable}/{total} ({pct(unverifiable, total)})",
             "avg_component_scores": avg_scores,
         },
@@ -619,8 +632,9 @@ def print_report(eval_result: dict, experiment_name: str = ""):
     print(f"  评测报告: {experiment_name}")
     print(f"{'═'*70}")
     print(f"  可执行率:        {s['exec_rate']}")
-    print(f"  准确率(EX):      {s['accuracy']}")
-    print(f"  准确率(可验证):  {s['accuracy_verifiable']}")
+    print(f"  严格匹配:        {s['accuracy_exact']}")
+    print(f"  子集匹配:        {s['accuracy_subset']}")
+    print(f"  列交集匹配:      {s['accuracy_intersection']}")
     print(f"  无法验证(0行):   {s['unverifiable_rate']}")
 
     # 组件评分

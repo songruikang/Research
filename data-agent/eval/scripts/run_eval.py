@@ -130,8 +130,9 @@ def generate_report(data, experiments, report_path: Path):
     headers = ["指标"] + [exps[k]["label"] for k in order]
     lines.append("| " + " | ".join(headers) + " |")
     lines.append("|" + "|".join(["------"] * len(headers)) + "|")
-    for label, key in [("可执行率", "exec_rate"), ("准确率(EX)", "accuracy"),
-                        ("准确率(可验证)", "accuracy_verifiable"), ("无法验证(0行)", "unverifiable_rate")]:
+    for label, key in [("可执行率", "exec_rate"), ("严格匹配", "accuracy_exact"),
+                        ("子集匹配", "accuracy_subset"), ("列交集匹配", "accuracy_intersection"),
+                        ("无法验证(0行)", "unverifiable_rate")]:
         row = [label] + [exps[k]["summary"][key] for k in order]
         lines.append("| " + " | ".join(row) + " |")
     lines.append("")
