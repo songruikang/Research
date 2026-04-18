@@ -134,7 +134,7 @@ def call_ollama(api_base: str, model: str, system: str, user: str, timeout: int 
 def generate_sql(model: str, api_base: str, api_key: str,
                   user_prompt: str, timeout: int = 120) -> str:
     """根据模型前缀选择调用方式"""
-    if model.startswith("ollama/"):
+    if model.startswith(("ollama/", "ollama_chat/")):
         text = call_ollama(api_base, model, SYSTEM_PROMPT, user_prompt, timeout)
     else:
         text = call_openai_compatible(api_base, model, api_key, SYSTEM_PROMPT, user_prompt, timeout)
