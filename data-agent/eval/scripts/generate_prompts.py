@@ -298,22 +298,6 @@ def _extract_sql_skeleton(sql: str) -> str:
         return sql[:50]
 
 
-OLLAMA_URL = "http://localhost:11434/api/embeddings"
-EMBED_MODEL = "nomic-embed-text"
-
-
-def _get_embedding(text: str) -> list[float]:
-    """调用 Ollama 获取文本 embedding"""
-    import urllib.request
-    req = urllib.request.Request(
-        OLLAMA_URL,
-        data=json.dumps({"model": EMBED_MODEL, "prompt": text}).encode(),
-        headers={"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read())["embedding"]
-
-
 def _cosine_sim(a: list[float], b: list[float]) -> float:
     """余弦相似度"""
     import math
@@ -323,63 +307,51 @@ def _cosine_sim(a: list[float], b: list[float]) -> float:
     return dot / (na * nb)
 
 
+def _tfidf_score(q_kw: set, p_kw: set, idf: dict) -> float:
+    """TF-IDF 加权余弦相似度"""
+    import math
+    q_weights = {kw: idf.get(kw, 1.0) for kw in q_kw}
+    p_weights = {kw: idf.get(kw, 1.0) for kw in p_kw}
+    q_norm = math.sqrt(sum(w * w for w in q_weights.values())) or 1.0
+    p_norm = math.sqrt(sum(w * w for w in p_weights.values())) or 1.0
+    dot = sum(q_weights.get(kw, 0) * p_weights.get(kw, 0) for kw in q_kw & p_kw)
+    return dot / (q_norm * p_norm)
+
+
 def load_few_shot_index() -> dict | None:
-    """加载 few-shot 库，预计算 embedding 和 SQL 骨架"""
+    """加载 few-shot 库，预计算 TF-IDF 权重和 SQL 骨架"""
     if not FEW_SHOT_PATH.exists():
         return None
     with open(FEW_SHOT_PATH) as f:
         pairs = json.load(f)
 
-    # 预计算 embedding 和 SQL 骨架
-    # embedding 缓存文件，避免重复调用
-    cache_path = FEW_SHOT_PATH.parent / ".generated" / "few_shot_embeddings.json"
-    cached = {}
-    if cache_path.exists():
-        with open(cache_path) as f:
-            cached = json.load(f)
-
-    updated = False
-    for p in pairs:
-        p["_skeleton"] = _extract_sql_skeleton(p["sql"])
-        if p["id"] in cached:
-            p["_embedding"] = cached[p["id"]]
-        else:
-            print(f"  Computing embedding for {p['id']}...")
-            p["_embedding"] = _get_embedding(p["question"])
-            cached[p["id"]] = p["_embedding"]
-            updated = True
-
-    if updated:
-        cache_path.parent.mkdir(exist_ok=True)
-        with open(cache_path, "w") as f:
-            json.dump(cached, f)
-
-    # 同时保留关键词索引作为 fallback
+    # 预计算关键词和 SQL 骨架
     for p in pairs:
         p["_keywords"] = _expand_keywords(p["question"])
+        p["_skeleton"] = _extract_sql_skeleton(p["sql"])
 
-    return {"pairs": pairs}
+    # 计算 IDF
+    import math
+    doc_count = len(pairs)
+    all_keywords = set()
+    for p in pairs:
+        all_keywords.update(p["_keywords"])
+    idf = {}
+    for kw in all_keywords:
+        df = sum(1 for p in pairs if kw in p["_keywords"])
+        idf[kw] = math.log((doc_count + 1) / (df + 1)) + 1
+
+    return {"pairs": pairs, "idf": idf}
 
 
 def retrieve_few_shot(question: str, fs_index: dict, top_k: int = 3) -> list[dict]:
-    """Phase A6: Embedding 相似度 top 候选 + SQL 骨架多样性重排"""
+    """Phase A6: TF-IDF 相似度 top 候选 + SQL 骨架多样性重排"""
     pairs = fs_index["pairs"]
+    idf = fs_index["idf"]
+    q_kw = _expand_keywords(question)
 
-    # Step 1: Embedding 余弦相似度，取 top 10 候选
-    try:
-        q_emb = _get_embedding(question)
-        scored = [(
-            _cosine_sim(q_emb, p["_embedding"]),
-            p
-        ) for p in pairs]
-    except Exception:
-        # Ollama 不可用时 fallback 到关键词匹配
-        q_kw = _expand_keywords(question)
-        scored = []
-        for p in pairs:
-            overlap = len(q_kw & p["_keywords"])
-            union = len(q_kw | p["_keywords"])
-            scored.append((overlap / union if union > 0 else 0, p))
+    # Step 1: TF-IDF 相似度，取 top 10 候选
+    scored = [(_tfidf_score(q_kw, p["_keywords"], idf), p) for p in pairs]
 
     scored.sort(key=lambda x: -x[0])
     candidates = scored[:10]
