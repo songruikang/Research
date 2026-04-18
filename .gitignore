@@ -23,3 +23,5 @@ dist/
 # IDE
 .idea/
 .vscode/
+/data-agent/.claude/
+/data-agent/eval/.generated/

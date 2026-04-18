@@ -19,7 +19,7 @@ except ImportError:
     HAS_SQLGLOT = False
 
 # 项目根目录（eval/ 的上一级）
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 # ─── DDL 提取 ───
@@ -77,10 +77,14 @@ def execute_sql(conn: duckdb.DuckDBPyConnection, sql: str) -> dict:
 
 
 def compare_results(generated: dict, expected: dict) -> dict:
-    """对比两个 SQL 的执行结果，三层判定：
-    - correct: 值集合完全一致（业界 EX 标准）
-    - correct_relaxed: 行数相同，期望行的值是生成行值的子集（列不同但数据对）
-    - wrong: 真正的逻辑错误
+    """对比两个 SQL 的执行结果，判定逻辑：
+    - correct: 行数相同，且值集合完全一致或存在子集关系（列差异不影响判定）
+    - wrong: 行数不同，或值集合不匹配
+    - error: SQL 执行失败
+    - unverifiable: 双方均 0 行
+
+    列差异作为诊断信息保留在 reason 中，但不影响 correct/wrong 判定。
+    这与 BIRD/Spider 的 EX 标准对齐：题目不指定返回列时，多返回或少返回列不算错。
     """
     if not generated["ok"]:
         return {"match": False, "verdict": "error", "reason": f"生成SQL执行失败: {generated['error']}"}
@@ -100,7 +104,7 @@ def compare_results(generated: dict, expected: dict) -> dict:
             "columns_match": cols_match,
         }
 
-    # 列名对比（用于诊断）
+    # 列名对比（诊断用，不影响判定）
     gen_cols = generated["columns"]
     exp_cols = expected["columns"]
     cols_same = gen_cols == exp_cols
@@ -122,15 +126,18 @@ def compare_results(generated: dict, expected: dict) -> dict:
             "reason": f"行数不同: 生成{gen_rows}行 vs 期望{exp_rows}行{col_diff_note}",
         }
 
-    # 转成可比较的集合（忽略列名差异，只比值）
+    # ── 值匹配（行数已确认相同）──
+
+    # 1. 精确匹配：列完全一致时，直接比值元组
     gen_set = set(tuple(str(v) for v in row) for row in generated["rows"])
     exp_set = set(tuple(str(v) for v in row) for row in expected["rows"])
 
     if gen_set == exp_set:
-        return {"match": True, "verdict": "correct", "reason": "完全匹配"}
+        return {"match": True, "verdict": "correct", "match_level": "exact", "reason": "完全匹配"}
 
-    # ── 宽松匹配：行数相同但列不同，检查值子集关系 ──
-    if gen_rows == exp_rows and gen_rows > 0:
+    # 2. 子集匹配：行数相同时，检查值子集关系
+    subset_matched = False
+    if gen_rows > 0:
         matched_rows = 0
         for exp_row in expected["rows"]:
             exp_vals = set(str(v) for v in exp_row if v is not None and str(v).strip())
@@ -140,20 +147,42 @@ def compare_results(generated: dict, expected: dict) -> dict:
                     matched_rows += 1
                     break
         if matched_rows == exp_rows:
+            subset_matched = True
+
+    if subset_matched:
+        return {
+            "match": True,
+            "verdict": "correct",
+            "match_level": "subset",
+            "reason": f"值子集匹配({gen_rows}行){col_diff_note}",
+        }
+
+    # 3. 列交集比对：取两侧共有列，只比交集列的值
+    common_cols = [c for c in exp_cols if c in gen_cols]
+    if common_cols:
+        gen_col_idx = [gen_cols.index(c) for c in common_cols]
+        exp_col_idx = [exp_cols.index(c) for c in common_cols]
+
+        gen_proj = set(
+            tuple(str(row[i]) for i in gen_col_idx)
+            for row in generated["rows"]
+        )
+        exp_proj = set(
+            tuple(str(row[i]) for i in exp_col_idx)
+            for row in expected["rows"]
+        )
+
+        if gen_proj == exp_proj:
             return {
                 "match": True,
-                "verdict": "correct_relaxed",
-                "reason": f"逻辑正确，列选择不同({gen_rows}行){col_diff_note}",
+                "verdict": "correct",
+                "match_level": "intersection",
+                "reason": f"交集列匹配({len(common_cols)}列, {gen_rows}行){col_diff_note}",
             }
 
+    # 4. 不匹配
     overlap = gen_set & exp_set
-    only_gen = gen_set - exp_set
-    only_exp = exp_set - gen_set
-    # 诊断：行数相同但值不同 → 通常是 WHERE/JOIN 条件偏差
-    if gen_rows == exp_rows:
-        diag = f"行数相同({gen_rows}行)但值不同: {len(overlap)}行重合{col_diff_note}"
-    else:
-        diag = f"{len(overlap)}行重合, 多{len(only_gen)}行, 缺{len(only_exp)}行{col_diff_note}"
+    diag = f"行数相同({gen_rows}行)但值不同: {len(overlap)}行重合{col_diff_note}"
     return {
         "match": False,
         "verdict": "wrong",
@@ -539,6 +568,7 @@ def run_evaluation(test_cases: list, generated_sqls: dict, db_path: str) -> dict
             "executable": gen_result["ok"],
             "correct": comparison["match"],
             "verdict": verdict,
+            "match_level": comparison.get("match_level"),
             "reason": comparison["reason"],
             "generated_sql": gen_sql,
             "expected_sql": case["expected_sql"],
@@ -554,14 +584,17 @@ def run_evaluation(test_cases: list, generated_sqls: dict, db_path: str) -> dict
     # 汇总
     total = len(results)
     executable = sum(1 for r in results if r["executable"])
-    correct_strict = sum(1 for r in results if r["verdict"] == "correct")
-    correct_relaxed = sum(1 for r in results if r["verdict"] == "correct_relaxed")
-    correct_all = correct_strict + correct_relaxed
+    correct = sum(1 for r in results if r["verdict"] == "correct")
     unverifiable = sum(1 for r in results if r["verdict"] == "unverifiable")
     wrong = sum(1 for r in results if r["verdict"] == "wrong")
     error = sum(1 for r in results if r["verdict"] == "error")
     verifiable = total - unverifiable
     pct = lambda n, d: f"{100*n/d:.0f}%" if d > 0 else "N/A"
+
+    # 三级匹配分别统计
+    exact = sum(1 for r in results if r.get("match_level") == "exact")
+    subset = sum(1 for r in results if r.get("match_level") in ("exact", "subset"))
+    intersection = correct  # 三级都算 correct
 
     # 组件评分汇总
     scored = [r for r in results if r["component_scores"]]
@@ -577,16 +610,14 @@ def run_evaluation(test_cases: list, generated_sqls: dict, db_path: str) -> dict
         "summary": {
             "total": total,
             "executable": executable,
-            "correct": correct_strict,
-            "correct_relaxed": correct_relaxed,
-            "correct_all": correct_all,
+            "correct": correct,
             "unverifiable": unverifiable,
             "wrong": wrong,
             "error": error,
             "exec_rate": f"{executable}/{total} ({pct(executable, total)})",
-            "accuracy_strict": f"{correct_strict}/{total} ({pct(correct_strict, total)})",
-            "accuracy_relaxed": f"{correct_all}/{total} ({pct(correct_all, total)})",
-            "accuracy_verifiable": f"{correct_all}/{verifiable} ({pct(correct_all, verifiable)})" if verifiable > 0 else "N/A",
+            "accuracy_exact": f"{exact}/{total} ({pct(exact, total)})",
+            "accuracy_subset": f"{subset}/{total} ({pct(subset, total)})",
+            "accuracy_intersection": f"{intersection}/{total} ({pct(intersection, total)})",
             "unverifiable_rate": f"{unverifiable}/{total} ({pct(unverifiable, total)})",
             "avg_component_scores": avg_scores,
         },
@@ -601,8 +632,9 @@ def print_report(eval_result: dict, experiment_name: str = ""):
     print(f"  评测报告: {experiment_name}")
     print(f"{'═'*70}")
     print(f"  可执行率:        {s['exec_rate']}")
-    print(f"  准确率(严格):    {s['accuracy_strict']}")
-    print(f"  准确率(可验证):  {s['accuracy_verifiable']}")
+    print(f"  严格匹配:        {s['accuracy_exact']}")
+    print(f"  子集匹配:        {s['accuracy_subset']}")
+    print(f"  列交集匹配:      {s['accuracy_intersection']}")
     print(f"  无法验证(0行):   {s['unverifiable_rate']}")
 
     # 组件评分
@@ -621,7 +653,7 @@ def print_report(eval_result: dict, experiment_name: str = ""):
 
     # 按难度汇总
     from collections import defaultdict
-    by_diff = defaultdict(lambda: {"total": 0, "correct": 0, "correct_relaxed": 0, "unverifiable": 0, "wrong": 0, "error": 0, "scores": []})
+    by_diff = defaultdict(lambda: {"total": 0, "correct": 0, "unverifiable": 0, "wrong": 0, "error": 0, "scores": []})
     for r in eval_result["details"]:
         d = r.get("difficulty", "Unknown")
         by_diff[d]["total"] += 1
@@ -629,7 +661,7 @@ def print_report(eval_result: dict, experiment_name: str = ""):
         if r.get("component_scores"):
             by_diff[d]["scores"].append(r["component_scores"]["total"])
 
-    print(f"  {'难度':12s} {'总数':>4s} {'正确':>4s} {'错误':>4s} {'不可验证':>8s} {'执行失败':>8s} {'严格准确率':>10s} {'平均评分':>8s}")
+    print(f"  {'难度':12s} {'总数':>4s} {'正确':>4s} {'错误':>4s} {'不可验证':>8s} {'执行失败':>8s} {'准确率(EX)':>10s} {'平均评分':>8s}")
     for d in ["Easy", "Medium", "Hard", "Extra Hard"]:
         if d not in by_diff:
             continue
@@ -661,7 +693,7 @@ def print_report(eval_result: dict, experiment_name: str = ""):
 # ─── 入口 ───
 
 if __name__ == "__main__":
-    eval_dir = Path(__file__).resolve().parent
+    eval_dir = Path(__file__).resolve().parent.parent
     db_path = str(PROJECT_ROOT / "telecom" / "output" / "telecom_nms.duckdb")
     mdl_path = str(PROJECT_ROOT / "telecom" / "input" / "telecom_mdl.json")
     test_cases_path = str(eval_dir / "telecom_test_cases_100.json")

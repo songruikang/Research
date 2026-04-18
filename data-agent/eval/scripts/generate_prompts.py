@@ -1,24 +1,34 @@
 """
-NL2SQL 生成器 v3 — 4 组 AB 实验 + 简陋版 Pipeline
+为 100 道评测题生成 6 组 LLM Prompt 文件（A-F 配置）
 
-Pipeline 流程 (Schema Linking 模式):
-  Phase A: 工程预处理（零 LLM）
-    A1. 关键词提取 + 领域同义词扩展
-    A2. 表选择（关键词→表描述匹配 + FK 图扩展）
-    A3. 列裁剪（只保留匹配的列 + PK/FK + 状态列）
-    A4. JOIN 路径推导（从 FK 关系生成提示）
-    A5. 查询模式识别（聚合/排名/趋势/对比/分布）
-  Phase B: Prompt 组装
-  Phase C: LLM 调用（1 次）
-  Phase D: 工程后处理（sqlglot 校验）
+每组配置对应不同的 Schema 策略 / Few-shot / 知识注入组合，
+输出的 prompt 文件供后续 LLM 生成 SQL 使用（Sub-Agent 或 generate_sqls.py）。
 
-用法: python generate_sqls.py  — 生成 4 组预处理数据供 SubAgent 使用
+用法:
+  python eval/scripts/generate_prompts.py
+
+输入:
+  telecom/input/telecom_mdl.json         — Schema 定义（14 张表）
+  eval/telecom_test_cases_100.json       — 100 道评测题（question + implicit_knowledge）
+  eval/few_shot_pairs.json               — 43 条 few-shot 示例
+
+输出（写入 eval/.generated/）:
+  prompts_fullschema_no_knowledge.json    — A: 全量 Schema，无知识
+  prompts_fullschema_with_knowledge.json  — B: 全量 Schema，有知识
+  prompts_schemalink_no_knowledge.json    — C: Schema Linking，无知识
+  prompts_schemalink_with_knowledge.json  — D: Schema Linking，有知识
+  prompts_fullschema_fewshot.json         — E: 全量 Schema + Few-shot（推荐）
+  prompts_fullschema_fewshot_knowledge.json — F: 全量 Schema + Few-shot + 知识
+  questions_only.json                     — 100 题纯文本（不含 expected_sql）
+  full_ddl.sql                            — 完整 DDL（调试用）
+
+每个 prompt 文件结构:
+  {"_meta": {...}, "prompts": {"Q01": {"user_prompt": "...", ...}, ...}}
 """
 import json, re
 from pathlib import Path
 from datetime import datetime
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MDL_PATH = PROJECT_ROOT / "telecom" / "input" / "telecom_mdl.json"
 TEST_PATH = PROJECT_ROOT / "eval" / "telecom_test_cases_100.json"
 
@@ -255,10 +265,155 @@ def detect_query_pattern(question: str) -> str | None:
     return "+".join(detected) if detected else None
 
 
+# ─── Few-shot 检索（DAIL-SQL 风格：TF-IDF 相似度 + SQL 骨架多样性重排）───
+
+FEW_SHOT_PATH = PROJECT_ROOT / "eval" / "few_shot_pairs.json"
+
+
+def _extract_sql_skeleton(sql: str) -> str:
+    """用 sqlglot 提取 SQL 骨架：保留结构关键词，替换具体表/列/值为占位符"""
+    try:
+        import sqlglot
+        parsed = sqlglot.parse_one(sql, dialect="duckdb")
+        # 提取结构特征
+        features = []
+        sql_upper = sql.upper()
+        for kw in ["SELECT", "FROM", "WHERE", "JOIN", "LEFT JOIN", "GROUP BY",
+                    "HAVING", "ORDER BY", "LIMIT", "WITH", "UNION",
+                    "COUNT", "AVG", "SUM", "MAX", "MIN", "ROUND",
+                    "CASE", "ROW_NUMBER", "LAG", "LEAD", "RANK",
+                    "IN", "EXISTS", "NOT", "LIKE", "BETWEEN", "DISTINCT"]:
+            if kw in sql_upper:
+                features.append(kw)
+        # 统计 JOIN 数量
+        join_count = sql_upper.count(" JOIN ")
+        if join_count > 0:
+            features.append(f"JOIN×{join_count}")
+        # CTE 数量
+        cte_count = sql_upper.count(" AS (")
+        if cte_count > 0:
+            features.append(f"CTE×{cte_count}")
+        return "|".join(sorted(set(features)))
+    except Exception:
+        return sql[:50]
+
+
+OLLAMA_URL = "http://localhost:11434/api/embeddings"
+EMBED_MODEL = "nomic-embed-text"
+
+
+def _get_embedding(text: str) -> list[float]:
+    """调用 Ollama 获取文本 embedding"""
+    import urllib.request
+    req = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps({"model": EMBED_MODEL, "prompt": text}).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read())["embedding"]
+
+
+def _cosine_sim(a: list[float], b: list[float]) -> float:
+    """余弦相似度"""
+    import math
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a)) or 1.0
+    nb = math.sqrt(sum(x * x for x in b)) or 1.0
+    return dot / (na * nb)
+
+
+def load_few_shot_index() -> dict | None:
+    """加载 few-shot 库，预计算 embedding 和 SQL 骨架"""
+    if not FEW_SHOT_PATH.exists():
+        return None
+    with open(FEW_SHOT_PATH) as f:
+        pairs = json.load(f)
+
+    # 预计算 embedding 和 SQL 骨架
+    # embedding 缓存文件，避免重复调用
+    cache_path = FEW_SHOT_PATH.parent / ".generated" / "few_shot_embeddings.json"
+    cached = {}
+    if cache_path.exists():
+        with open(cache_path) as f:
+            cached = json.load(f)
+
+    updated = False
+    for p in pairs:
+        p["_skeleton"] = _extract_sql_skeleton(p["sql"])
+        if p["id"] in cached:
+            p["_embedding"] = cached[p["id"]]
+        else:
+            print(f"  Computing embedding for {p['id']}...")
+            p["_embedding"] = _get_embedding(p["question"])
+            cached[p["id"]] = p["_embedding"]
+            updated = True
+
+    if updated:
+        cache_path.parent.mkdir(exist_ok=True)
+        with open(cache_path, "w") as f:
+            json.dump(cached, f)
+
+    # 同时保留关键词索引作为 fallback
+    for p in pairs:
+        p["_keywords"] = _expand_keywords(p["question"])
+
+    return {"pairs": pairs}
+
+
+def retrieve_few_shot(question: str, fs_index: dict, top_k: int = 3) -> list[dict]:
+    """Phase A6: Embedding 相似度 top 候选 + SQL 骨架多样性重排"""
+    pairs = fs_index["pairs"]
+
+    # Step 1: Embedding 余弦相似度，取 top 10 候选
+    try:
+        q_emb = _get_embedding(question)
+        scored = [(
+            _cosine_sim(q_emb, p["_embedding"]),
+            p
+        ) for p in pairs]
+    except Exception:
+        # Ollama 不可用时 fallback 到关键词匹配
+        q_kw = _expand_keywords(question)
+        scored = []
+        for p in pairs:
+            overlap = len(q_kw & p["_keywords"])
+            union = len(q_kw | p["_keywords"])
+            scored.append((overlap / union if union > 0 else 0, p))
+
+    scored.sort(key=lambda x: -x[0])
+    candidates = scored[:10]
+
+    if not candidates:
+        return []
+
+    # Step 2: SQL 骨架多样性贪心重排
+    selected = [candidates[0]]
+    used_skeletons = {candidates[0][1]["_skeleton"]}
+
+    for _ in range(top_k - 1):
+        best = None
+        best_score = -1
+        for sim, p in candidates:
+            if any(p["id"] == s[1]["id"] for s in selected):
+                continue
+            diversity_bonus = 0.3 if p["_skeleton"] not in used_skeletons else 0
+            combined = sim + diversity_bonus
+            if combined > best_score:
+                best_score = combined
+                best = (sim, p)
+        if best:
+            selected.append(best)
+            used_skeletons.add(best[1]["_skeleton"])
+
+    return [{"question": s[1]["question"], "sql": s[1]["sql"]} for s in selected]
+
+
 # ─── 完整 Pipeline ───
 
 def run_pipeline(question: str, mdl: dict, schema_index: dict,
-                 use_schema_linking: bool, knowledge: str | None) -> dict:
+                 use_schema_linking: bool, knowledge: str | None,
+                 few_shot_examples: list[dict] | None = None) -> dict:
     """运行完整预处理 pipeline，返回组装好的 prompt 上下文"""
     result = {"question": question}
 
@@ -291,6 +446,13 @@ def run_pipeline(question: str, mdl: dict, schema_index: dict,
     if use_schema_linking and join_paths:
         prompt_parts.append("### JOIN PATHS ###\n" + "\n".join(join_paths))
 
+    if few_shot_examples:
+        fs_lines = []
+        for sample in few_shot_examples:
+            fs_lines.append(f"Question:\n{sample['question']}\nSQL:\n{sample['sql']}")
+        prompt_parts.append("### SQL SAMPLES ###\n" + "\n\n".join(fs_lines))
+        result["few_shot_count"] = len(few_shot_examples)
+
     if pattern:
         prompt_parts.append(f"### QUERY PATTERN ###\n检测到的查询模式: {pattern}")
 
@@ -305,41 +467,53 @@ def run_pipeline(question: str, mdl: dict, schema_index: dict,
     return result
 
 
-# ─── 主流程：生成 4 组预处理数据 ───
+# ─── 主流程：生成 6 组预处理数据 ───
 
 def main():
     mdl = load_mdl()
     schema_index = build_schema_index(mdl)
+    fs_index = load_few_shot_index()
 
     with open(TEST_PATH) as f:
         cases = json.load(f)
 
     configs = {
-        "A": {"schema_linking": False, "knowledge": False, "name": "fullschema_no_knowledge"},
-        "B": {"schema_linking": False, "knowledge": True,  "name": "fullschema_with_knowledge"},
-        "C": {"schema_linking": True,  "knowledge": False, "name": "schemalink_no_knowledge"},
-        "D": {"schema_linking": True,  "knowledge": True,  "name": "schemalink_with_knowledge"},
+        "A": {"schema_linking": False, "knowledge": False, "few_shot": False, "name": "fullschema_no_knowledge"},
+        "B": {"schema_linking": False, "knowledge": True,  "few_shot": False, "name": "fullschema_with_knowledge"},
+        "C": {"schema_linking": True,  "knowledge": False, "few_shot": False, "name": "schemalink_no_knowledge"},
+        "D": {"schema_linking": True,  "knowledge": True,  "few_shot": False, "name": "schemalink_with_knowledge"},
+        "E": {"schema_linking": False, "knowledge": False, "few_shot": True,  "name": "fullschema_fewshot"},
+        "F": {"schema_linking": False, "knowledge": True,  "few_shot": True,  "name": "fullschema_fewshot_knowledge"},
     }
 
-    # 生成 questions_only（无 expected_sql）
+    # 生成 questions_only（无 expected_sql）→ .generated/
+    gen_dir = PROJECT_ROOT / "eval" / ".generated"
+    gen_dir.mkdir(exist_ok=True)
     questions_only = [{k: c[k] for k in ["id", "difficulty", "question", "implicit_knowledge"]} for c in cases]
-    with open(PROJECT_ROOT / "eval" / "questions_only.json", "w") as f:
+    with open(gen_dir / "questions_only.json", "w") as f:
         json.dump(questions_only, f, ensure_ascii=False, indent=2)
 
     # 为每组配置生成 per-question prompt
     for cfg_key, cfg in configs.items():
+        if cfg["few_shot"] and not fs_index:
+            print(f"[{cfg_key}] SKIP — few_shot_pairs.json not found")
+            continue
+
         prompts = {}
         stats = {"total_ddl_chars": 0, "avg_tables": 0}
         for c in cases:
             qid = c["id"]
             knowledge = c["implicit_knowledge"] if cfg["knowledge"] else None
-            result = run_pipeline(c["question"], mdl, schema_index, cfg["schema_linking"], knowledge)
+            fs_examples = retrieve_few_shot(c["question"], fs_index) if cfg["few_shot"] else None
+            result = run_pipeline(c["question"], mdl, schema_index, cfg["schema_linking"], knowledge, fs_examples)
             prompts[qid] = {
                 "user_prompt": result["user_prompt"],
                 "selected_tables": result["selected_tables"],
                 "query_pattern": result["query_pattern"],
                 "ddl_chars": result["ddl_chars"],
             }
+            if cfg["few_shot"]:
+                prompts[qid]["few_shot_count"] = result.get("few_shot_count", 0)
             stats["total_ddl_chars"] += result["ddl_chars"]
             stats["avg_tables"] += len(result["selected_tables"])
 
@@ -352,19 +526,23 @@ def main():
                 "name": cfg["name"],
                 "schema_linking": cfg["schema_linking"],
                 "knowledge": cfg["knowledge"],
+                "few_shot": cfg["few_shot"],
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "stats": stats,
             },
             "prompts": prompts,
         }
-        path = PROJECT_ROOT / "eval" / f"prompts_{cfg['name']}.json"
+        path = gen_dir / f"prompts_{cfg['name']}.json"
         with open(path, "w") as f:
             json.dump(output, f, ensure_ascii=False, indent=2)
-        print(f"[{cfg_key}] {cfg['name']}: avg {stats['avg_tables']} tables, {stats['avg_ddl_chars']} chars/prompt → {path.name}")
+        label = f"avg {stats['avg_tables']} tables, {stats['avg_ddl_chars']} chars/prompt"
+        if cfg["few_shot"]:
+            label += ", +few-shot"
+        print(f"[{cfg_key}] {cfg['name']}: {label} → {path.name}")
 
-    # 生成 full DDL 文件
+    # 生成 full DDL 文件 → .generated/
     full_ddl = mdl_to_ddl(mdl)
-    with open(PROJECT_ROOT / "eval" / "full_ddl.sql", "w") as f:
+    with open(gen_dir / "full_ddl.sql", "w") as f:
         f.write(full_ddl)
     print(f"\nfull_ddl.sql: {len(full_ddl)} chars")
 
