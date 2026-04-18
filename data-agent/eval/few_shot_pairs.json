@@ -1,0 +1,407 @@
+[
+  {
+    "id": "FS01",
+    "question": "列出所有运行状态为DEGRADED的华为设备，包括设备名称、型号和所在站点ID",
+    "sql": "SELECT ne_name, model, site_id FROM t_network_element WHERE vendor = 'HUAWEI' AND oper_status = 'DEGRADED' ORDER BY ne_name;",
+    "pattern": "单表简单过滤",
+    "tables": [
+      "t_network_element"
+    ]
+  },
+  {
+    "id": "FS02",
+    "question": "有哪些L3VPN业务使用SRv6 TE承载并且带宽保证超过500Mbps？列出业务名称、客户名称和服务等级",
+    "sql": "SELECT vpn_name, customer_name, service_level FROM t_l3vpn_service WHERE underlay_type = 'SRV6_TE' AND bandwidth_mbps > 500 ORDER BY bandwidth_mbps DESC;",
+    "pattern": "单表简单过滤",
+    "tables": [
+      "t_l3vpn_service"
+    ]
+  },
+  {
+    "id": "FS03",
+    "question": "查看TIER1等级且制冷方式为液冷的站点有哪些，显示站点名称、城市、供电容量",
+    "sql": "SELECT site_name, city, power_capacity_kw FROM t_site WHERE tier = 'TIER1' AND cooling_type = 'LIQUID' ORDER BY power_capacity_kw DESC;",
+    "pattern": "单表简单过滤",
+    "tables": [
+      "t_site"
+    ]
+  },
+  {
+    "id": "FS04",
+    "question": "哪些SRv6 TE隧道的实测时延超过20ms并且处于运行状态？列出隧道名称、类型和实测时延",
+    "sql": "SELECT tunnel_name, tunnel_type, measured_latency_ms FROM t_tunnel WHERE tunnel_type = 'SRV6_TE' AND measured_latency_ms > 20 AND oper_status = 'UP' ORDER BY measured_latency_ms DESC;",
+    "pattern": "单表简单过滤",
+    "tables": [
+      "t_tunnel"
+    ]
+  },
+  {
+    "id": "FS05",
+    "question": "找出所有100GE物理接口中管理状态为UP但运行状态为DOWN的接口，显示接口名称和所属网元ID",
+    "sql": "SELECT if_name, ne_id FROM t_interface WHERE phy_type = '100GE' AND admin_status = 'UP' AND oper_status = 'DOWN' ORDER BY ne_id;",
+    "pattern": "单表简单过滤",
+    "tables": [
+      "t_interface"
+    ]
+  },
+  {
+    "id": "FS06",
+    "question": "按厂商统计每个厂商有多少PE角色的设备",
+    "sql": "SELECT vendor, COUNT(*) AS pe_count FROM t_network_element WHERE role = 'PE' GROUP BY vendor ORDER BY pe_count DESC;",
+    "pattern": "单表聚合",
+    "tables": [
+      "t_network_element"
+    ]
+  },
+  {
+    "id": "FS07",
+    "question": "统计每种承载隧道类型下的L3VPN业务数量和平均保证带宽",
+    "sql": "SELECT underlay_type, COUNT(*) AS vpn_count, ROUND(AVG(bandwidth_mbps), 2) AS avg_bandwidth_mbps FROM t_l3vpn_service GROUP BY underlay_type ORDER BY vpn_count DESC;",
+    "pattern": "单表聚合",
+    "tables": [
+      "t_l3vpn_service"
+    ]
+  },
+  {
+    "id": "FS08",
+    "question": "各站点类型分别有多少个ACTIVE状态的站点？同时统计平均机柜数量",
+    "sql": "SELECT site_type, COUNT(*) AS site_count, ROUND(AVG(total_rack_count), 1) AS avg_rack_count FROM t_site WHERE status = 'ACTIVE' GROUP BY site_type ORDER BY site_count DESC;",
+    "pattern": "单表聚合",
+    "tables": [
+      "t_site"
+    ]
+  },
+  {
+    "id": "FS09",
+    "question": "查看每个GOLD服务等级的VPN业务所绑定的PE设备信息，包括VPN名称、PE设备名称和接入带宽",
+    "sql": "SELECT v.vpn_name, ne.ne_name, b.access_bandwidth_mbps FROM t_l3vpn_service v JOIN t_vpn_pe_binding b ON v.vpn_id = b.vpn_id JOIN t_network_element ne ON b.ne_id = ne.ne_id WHERE v.service_level = 'GOLD' ORDER BY v.vpn_name, ne.ne_name;",
+    "pattern": "双表JOIN+过滤",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_pe_binding",
+      "t_network_element"
+    ]
+  },
+  {
+    "id": "FS10",
+    "question": "找出运行状态为DOWN的隧道对应的源端设备名称和目的端设备名称",
+    "sql": "SELECT t.tunnel_name, src.ne_name AS source_ne_name, dst.ne_name AS dest_ne_name FROM t_tunnel t JOIN t_network_element src ON t.source_ne_id = src.ne_id JOIN t_network_element dst ON t.dest_ne_id = dst.ne_id WHERE t.oper_status = 'DOWN' ORDER BY t.tunnel_name;",
+    "pattern": "双表JOIN+过滤",
+    "tables": [
+      "t_tunnel",
+      "t_network_element"
+    ]
+  },
+  {
+    "id": "FS11",
+    "question": "查看ZTE设备上有哪些板卡处于FAULT状态，显示设备名称、槽位号和板卡类型",
+    "sql": "SELECT ne.ne_name, b.slot_number, b.board_type FROM t_board b JOIN t_network_element ne ON b.ne_id = ne.ne_id WHERE ne.vendor = 'ZTE' AND b.oper_status = 'FAULT' ORDER BY ne.ne_name, b.slot_number;",
+    "pattern": "双表JOIN+过滤",
+    "tables": [
+      "t_board",
+      "t_network_element"
+    ]
+  },
+  {
+    "id": "FS12",
+    "question": "按VPN业务统计最近一周的平均端到端时延，只显示平均时延超过10ms的业务",
+    "sql": "SELECT v.vpn_name, v.service_level, ROUND(AVG(k.e2e_latency_avg_ms), 2) AS avg_latency_ms FROM t_l3vpn_service v JOIN t_vpn_sla_kpi k ON v.vpn_id = k.vpn_id WHERE k.collect_time >= NOW() - INTERVAL '7 days' GROUP BY v.vpn_name, v.service_level HAVING AVG(k.e2e_latency_avg_ms) > 10 ORDER BY avg_latency_ms DESC;",
+    "pattern": "双表JOIN+聚合",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_sla_kpi"
+    ]
+  },
+  {
+    "id": "FS13",
+    "question": "统计每台设备最近24小时的平均CPU利用率，按利用率降序排列前10名",
+    "sql": "SELECT ne.ne_name, ne.vendor, ROUND(AVG(k.cpu_usage_avg_pct), 2) AS avg_cpu_pct FROM t_network_element ne JOIN t_ne_perf_kpi k ON ne.ne_id = k.ne_id WHERE k.collect_time >= NOW() - INTERVAL '1 days' GROUP BY ne.ne_name, ne.vendor ORDER BY avg_cpu_pct DESC LIMIT 10;",
+    "pattern": "双表JOIN+聚合",
+    "tables": [
+      "t_ne_perf_kpi",
+      "t_network_element"
+    ]
+  },
+  {
+    "id": "FS14",
+    "question": "每个VPN业务最近一个月SLA全部达标的采集次数占总采集次数的比例是多少？",
+    "sql": "SELECT v.vpn_name, COUNT(*) AS total_samples, SUM(CASE WHEN k.sla_overall_met = TRUE THEN 1 ELSE 0 END) AS met_count, ROUND(SUM(CASE WHEN k.sla_overall_met = TRUE THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS met_pct FROM t_l3vpn_service v JOIN t_vpn_sla_kpi k ON v.vpn_id = k.vpn_id WHERE k.collect_time >= NOW() - INTERVAL '30 days' GROUP BY v.vpn_name ORDER BY met_pct ASC;",
+    "pattern": "双表JOIN+聚合",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_sla_kpi"
+    ]
+  },
+  {
+    "id": "FS15",
+    "question": "按隧道类型统计各类型隧道最近一周的平均丢包率和最大丢包率",
+    "sql": "SELECT t.tunnel_type, ROUND(AVG(k.packet_loss_rate_pct), 4) AS avg_loss_pct, ROUND(MAX(k.packet_loss_rate_pct), 4) AS max_loss_pct FROM t_tunnel t JOIN t_tunnel_perf_kpi k ON t.tunnel_id = k.tunnel_id WHERE k.collect_time >= NOW() - INTERVAL '7 days' GROUP BY t.tunnel_type ORDER BY avg_loss_pct DESC;",
+    "pattern": "双表JOIN+聚合",
+    "tables": [
+      "t_tunnel",
+      "t_tunnel_perf_kpi"
+    ]
+  },
+  {
+    "id": "FS16",
+    "question": "按厂商统计所有PE设备最近24小时的平均内存利用率，哪个厂商的设备内存压力最大？",
+    "sql": "SELECT ne.vendor, ROUND(AVG(k.memory_usage_avg_pct), 2) AS avg_mem_pct, ROUND(MAX(k.memory_usage_max_pct), 2) AS max_mem_pct FROM t_network_element ne JOIN t_ne_perf_kpi k ON ne.ne_id = k.ne_id WHERE ne.role = 'PE' AND k.collect_time >= NOW() - INTERVAL '1 days' GROUP BY ne.vendor ORDER BY avg_mem_pct DESC;",
+    "pattern": "双表JOIN+聚合",
+    "tables": [
+      "t_ne_perf_kpi",
+      "t_network_element"
+    ]
+  },
+  {
+    "id": "FS17",
+    "question": "统计每个VPN业务的PE绑定数量，只看绑定数超过3个的业务",
+    "sql": "SELECT v.vpn_name, v.customer_name, COUNT(b.binding_id) AS binding_count FROM t_l3vpn_service v JOIN t_vpn_pe_binding b ON v.vpn_id = b.vpn_id GROUP BY v.vpn_name, v.customer_name HAVING COUNT(b.binding_id) > 3 ORDER BY binding_count DESC;",
+    "pattern": "双表JOIN+聚合",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_pe_binding"
+    ]
+  },
+  {
+    "id": "FS18",
+    "question": "最近一周每条VPN业务的平均丢包率是多少？只看PLATINUM服务等级的业务，按丢包率降序",
+    "sql": "SELECT v.vpn_name, ROUND(AVG(k.e2e_packet_loss_pct), 4) AS avg_loss_pct FROM t_l3vpn_service v JOIN t_vpn_sla_kpi k ON v.vpn_id = k.vpn_id WHERE v.service_level = 'PLATINUM' AND k.collect_time >= NOW() - INTERVAL '7 days' GROUP BY v.vpn_name ORDER BY avg_loss_pct DESC;",
+    "pattern": "双表JOIN+聚合",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_sla_kpi"
+    ]
+  },
+  {
+    "id": "FS19",
+    "question": "统计每台设备的板卡总数和运行异常板卡数，找出异常板卡数大于0的设备",
+    "sql": "SELECT ne.ne_name, ne.vendor, COUNT(b.board_id) AS total_boards, SUM(CASE WHEN b.oper_status = 'FAULT' THEN 1 ELSE 0 END) AS fault_boards FROM t_network_element ne JOIN t_board b ON ne.ne_id = b.ne_id GROUP BY ne.ne_name, ne.vendor HAVING SUM(CASE WHEN b.oper_status = 'FAULT' THEN 1 ELSE 0 END) > 0 ORDER BY fault_boards DESC;",
+    "pattern": "双表JOIN+聚合",
+    "tables": [
+      "t_network_element",
+      "t_board"
+    ]
+  },
+  {
+    "id": "FS20",
+    "question": "各隧道最近一周的平均带宽利用率是多少？只看利用率超过70%的隧道",
+    "sql": "SELECT t.tunnel_name, t.tunnel_type, ROUND(AVG(k.bandwidth_usage_pct), 2) AS avg_bw_usage_pct FROM t_tunnel t JOIN t_tunnel_perf_kpi k ON t.tunnel_id = k.tunnel_id WHERE k.collect_time >= NOW() - INTERVAL '7 days' GROUP BY t.tunnel_name, t.tunnel_type HAVING AVG(k.bandwidth_usage_pct) > 70 ORDER BY avg_bw_usage_pct DESC;",
+    "pattern": "双表JOIN+聚合",
+    "tables": [
+      "t_tunnel",
+      "t_tunnel_perf_kpi"
+    ]
+  },
+  {
+    "id": "FS21",
+    "question": "统计每个VPN业务在最近一周内时延SLA不达标的次数，按不达标次数排序",
+    "sql": "SELECT v.vpn_name, v.service_level, SUM(CASE WHEN k.sla_latency_met = FALSE THEN 1 ELSE 0 END) AS latency_violation_count FROM t_l3vpn_service v JOIN t_vpn_sla_kpi k ON v.vpn_id = k.vpn_id WHERE k.collect_time >= NOW() - INTERVAL '7 days' GROUP BY v.vpn_name, v.service_level ORDER BY latency_violation_count DESC;",
+    "pattern": "双表JOIN+聚合",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_sla_kpi"
+    ]
+  },
+  {
+    "id": "FS22",
+    "question": "查看华为PE设备上每个VPN业务的平均端到端抖动，关联设备名称和VPN名称",
+    "sql": "SELECT ne.ne_name, v.vpn_name, ROUND(AVG(k.e2e_jitter_avg_ms), 2) AS avg_jitter_ms FROM t_vpn_sla_kpi k JOIN t_l3vpn_service v ON k.vpn_id = v.vpn_id JOIN t_network_element ne ON k.pe_ne_id = ne.ne_id WHERE ne.vendor = 'HUAWEI' AND ne.role = 'PE' GROUP BY ne.ne_name, v.vpn_name ORDER BY avg_jitter_ms DESC;",
+    "pattern": "多表JOIN（3+表）",
+    "tables": [
+      "t_vpn_sla_kpi",
+      "t_l3vpn_service",
+      "t_network_element"
+    ]
+  },
+  {
+    "id": "FS23",
+    "question": "列出每个站点部署了多少台PE设备以及这些设备所承载的VPN业务数量",
+    "sql": "SELECT s.site_name, s.city, COUNT(DISTINCT ne.ne_id) AS pe_device_count, COUNT(DISTINCT b.vpn_id) AS vpn_count FROM t_site s JOIN t_network_element ne ON s.site_id = ne.site_id JOIN t_vpn_pe_binding b ON ne.ne_id = b.ne_id WHERE ne.role = 'PE' GROUP BY s.site_name, s.city ORDER BY vpn_count DESC;",
+    "pattern": "多表JOIN（3+表）",
+    "tables": [
+      "t_site",
+      "t_network_element",
+      "t_vpn_pe_binding"
+    ]
+  },
+  {
+    "id": "FS24",
+    "question": "查看每个省份所有设备上物理接口的平均入方向带宽利用率，找出利用率最高的前5个省份",
+    "sql": "SELECT s.province, ROUND(AVG(kpi.in_bandwidth_usage_pct), 2) AS avg_in_bw_pct FROM t_site s JOIN t_network_element ne ON s.site_id = ne.site_id JOIN t_interface i ON ne.ne_id = i.ne_id JOIN t_interface_perf_kpi kpi ON i.if_id = kpi.if_id WHERE i.if_type = 'PHYSICAL' AND kpi.collect_time >= NOW() - INTERVAL '7 days' GROUP BY s.province ORDER BY avg_in_bw_pct DESC LIMIT 5;",
+    "pattern": "多表JOIN（3+表）",
+    "tables": [
+      "t_site",
+      "t_network_element",
+      "t_interface",
+      "t_interface_perf_kpi"
+    ]
+  },
+  {
+    "id": "FS25",
+    "question": "找出每个VPN业务绑定的PE设备所在站点列表，关联VPN名称、设备名称和站点名称",
+    "sql": "SELECT v.vpn_name, v.customer_name, ne.ne_name, s.site_name, s.city FROM t_l3vpn_service v JOIN t_vpn_pe_binding b ON v.vpn_id = b.vpn_id JOIN t_network_element ne ON b.ne_id = ne.ne_id JOIN t_site s ON ne.site_id = s.site_id WHERE v.admin_status = 'ACTIVE' ORDER BY v.vpn_name, s.city;",
+    "pattern": "多表JOIN（3+表）",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_pe_binding",
+      "t_network_element",
+      "t_site"
+    ]
+  },
+  {
+    "id": "FS26",
+    "question": "按站点统计设备最近24小时的平均温度，只看数据中心类型站点",
+    "sql": "SELECT s.site_name, s.city, ROUND(AVG(k.temperature_avg_c), 1) AS avg_temp_c, ROUND(MAX(k.temperature_max_c), 1) AS max_temp_c FROM t_site s JOIN t_network_element ne ON s.site_id = ne.site_id JOIN t_ne_perf_kpi k ON ne.ne_id = k.ne_id WHERE s.site_type = 'DC' AND k.collect_time >= NOW() - INTERVAL '1 days' GROUP BY s.site_name, s.city ORDER BY avg_temp_c DESC;",
+    "pattern": "多表JOIN（3+表）",
+    "tables": [
+      "t_site",
+      "t_network_element",
+      "t_ne_perf_kpi"
+    ]
+  },
+  {
+    "id": "FS27",
+    "question": "查看哪些接口的CRC错误数在最近一周超过1000次，同时显示接口名称、所属设备和站点",
+    "sql": "SELECT i.if_name, ne.ne_name, s.site_name, SUM(kpi.crc_error_count) AS total_crc_errors FROM t_interface i JOIN t_network_element ne ON i.ne_id = ne.ne_id JOIN t_site s ON ne.site_id = s.site_id JOIN t_interface_perf_kpi kpi ON i.if_id = kpi.if_id WHERE kpi.collect_time >= NOW() - INTERVAL '7 days' GROUP BY i.if_name, ne.ne_name, s.site_name HAVING SUM(kpi.crc_error_count) > 1000 ORDER BY total_crc_errors DESC;",
+    "pattern": "多表JOIN（3+表）",
+    "tables": [
+      "t_interface",
+      "t_network_element",
+      "t_site",
+      "t_interface_perf_kpi"
+    ]
+  },
+  {
+    "id": "FS28",
+    "question": "SRv6 Policy中，源端和宿端设备分别在哪些站点？列出策略名称、源端设备、宿端设备和各自站点",
+    "sql": "SELECT p.policy_name, src.ne_name AS source_ne, dst.ne_name AS dest_ne, ss.site_name AS source_site, ds.site_name AS dest_site FROM t_srv6_policy p JOIN t_network_element src ON p.source_ne_id = src.ne_id JOIN t_network_element dst ON p.dest_ne_id = dst.ne_id JOIN t_site ss ON src.site_id = ss.site_id JOIN t_site ds ON dst.site_id = ds.site_id WHERE p.oper_status = 'UP' ORDER BY p.policy_name;",
+    "pattern": "多表JOIN（3+表）",
+    "tables": [
+      "t_srv6_policy",
+      "t_network_element",
+      "t_site"
+    ]
+  },
+  {
+    "id": "FS29",
+    "question": "找出跨省的物理链路（A端和Z端不在同一省份），显示链路名称、两端站点名称和省份",
+    "sql": "SELECT l.link_name, sa.site_name AS a_site, sa.province AS a_province, sz.site_name AS z_site, sz.province AS z_province, l.bandwidth_mbps FROM t_physical_link l JOIN t_site sa ON l.a_site_id = sa.site_id JOIN t_site sz ON l.z_site_id = sz.site_id WHERE sa.province != sz.province ORDER BY l.bandwidth_mbps DESC;",
+    "pattern": "多表JOIN（3+表）",
+    "tables": [
+      "t_physical_link",
+      "t_site"
+    ]
+  },
+  {
+    "id": "FS30",
+    "question": "找出CPU利用率最高的前5台设备最近24小时的CPU趋势，按设备和时间排列",
+    "sql": "WITH top_cpu_devices AS ( SELECT ne_id, ROUND(AVG(cpu_usage_avg_pct), 2) AS avg_cpu FROM t_ne_perf_kpi WHERE collect_time >= NOW() - INTERVAL '1 days' GROUP BY ne_id ORDER BY avg_cpu DESC LIMIT 5 ) SELECT ne.ne_name, k.collect_time, k.cpu_usage_avg_pct FROM t_ne_perf_kpi k JOIN t_network_element ne ON k.ne_id = ne.ne_id JOIN top_cpu_devices t ON k.ne_id = t.ne_id WHERE k.collect_time >= NOW() - INTERVAL '1 days' ORDER BY ne.ne_name, k.collect_time;",
+    "pattern": "CTE",
+    "tables": [
+      "t_ne_perf_kpi",
+      "t_network_element"
+    ]
+  },
+  {
+    "id": "FS31",
+    "question": "计算每个VPN业务的SLA达标率，并将达标率划分为优秀(>=95%)、良好(>=80%)、差(<80%)三个等级",
+    "sql": "WITH vpn_sla_stats AS ( SELECT v.vpn_name, v.service_level, ROUND(SUM(CASE WHEN k.sla_overall_met = TRUE THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS met_rate FROM t_l3vpn_service v JOIN t_vpn_sla_kpi k ON v.vpn_id = k.vpn_id GROUP BY v.vpn_name, v.service_level ) SELECT vpn_name, service_level, met_rate, CASE WHEN met_rate >= 95 THEN '优秀' WHEN met_rate >= 80 THEN '良好' ELSE '差' END AS sla_grade FROM vpn_sla_stats ORDER BY met_rate ASC;",
+    "pattern": "CTE",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_sla_kpi"
+    ]
+  },
+  {
+    "id": "FS32",
+    "question": "找出每个站点中接口出方向带宽利用率最高的那个接口",
+    "sql": "WITH site_if_bw AS ( SELECT s.site_name, i.if_name, ne.ne_name, ROUND(AVG(kpi.out_bandwidth_usage_pct), 2) AS avg_out_bw_pct FROM t_site s JOIN t_network_element ne ON s.site_id = ne.site_id JOIN t_interface i ON ne.ne_id = i.ne_id JOIN t_interface_perf_kpi kpi ON i.if_id = kpi.if_id WHERE kpi.collect_time >= NOW() - INTERVAL '1 days' AND i.if_type = 'PHYSICAL' GROUP BY s.site_name, i.if_name, ne.ne_name ), ranked AS ( SELECT *, ROW_NUMBER() OVER (PARTITION BY site_name ORDER BY avg_out_bw_pct DESC) AS rn FROM site_if_bw ) SELECT site_name, ne_name, if_name, avg_out_bw_pct FROM ranked WHERE rn = 1 ORDER BY avg_out_bw_pct DESC;",
+    "pattern": "CTE",
+    "tables": [
+      "t_site",
+      "t_network_element",
+      "t_interface",
+      "t_interface_perf_kpi"
+    ]
+  },
+  {
+    "id": "FS33",
+    "question": "找出平均吞吐量低于保证带宽80%的VPN业务，可能存在带宽浪费",
+    "sql": "WITH vpn_throughput AS ( SELECT v.vpn_name, v.bandwidth_mbps AS guaranteed_bw, ROUND(AVG(k.throughput_mbps), 2) AS avg_throughput FROM t_l3vpn_service v JOIN t_vpn_sla_kpi k ON v.vpn_id = k.vpn_id WHERE v.bandwidth_mbps IS NOT NULL AND v.bandwidth_mbps > 0 AND k.collect_time >= NOW() - INTERVAL '7 days' GROUP BY v.vpn_name, v.bandwidth_mbps ) SELECT vpn_name, guaranteed_bw, avg_throughput, ROUND(avg_throughput * 100.0 / guaranteed_bw, 2) AS utilization_pct FROM vpn_throughput WHERE avg_throughput < guaranteed_bw * 0.8 ORDER BY utilization_pct ASC;",
+    "pattern": "CTE",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_sla_kpi"
+    ]
+  },
+  {
+    "id": "FS34",
+    "question": "按厂商统计设备的紧急告警总数，只统计有紧急告警的设备，并计算每个厂商的平均紧急告警数",
+    "sql": "WITH ne_alarm AS ( SELECT ne.vendor, ne.ne_name, SUM(k.alarm_critical_count) AS total_critical FROM t_network_element ne JOIN t_ne_perf_kpi k ON ne.ne_id = k.ne_id WHERE k.collect_time >= NOW() - INTERVAL '1 days' GROUP BY ne.vendor, ne.ne_name HAVING SUM(k.alarm_critical_count) > 0 ) SELECT vendor, COUNT(*) AS device_count, SUM(total_critical) AS total_critical_alarms, ROUND(AVG(total_critical), 1) AS avg_critical_per_device FROM ne_alarm GROUP BY vendor ORDER BY total_critical_alarms DESC;",
+    "pattern": "CTE",
+    "tables": [
+      "t_network_element",
+      "t_ne_perf_kpi"
+    ]
+  },
+  {
+    "id": "FS35",
+    "question": "按设备维度对最近一周的每日平均CPU利用率做排名，找出每天排名前3的设备",
+    "sql": "SELECT ne_name, collect_date, avg_cpu_pct, daily_rank FROM ( SELECT ne.ne_name, DATE(k.collect_time) AS collect_date, ROUND(AVG(k.cpu_usage_avg_pct), 2) AS avg_cpu_pct, ROW_NUMBER() OVER (PARTITION BY DATE(k.collect_time) ORDER BY AVG(k.cpu_usage_avg_pct) DESC) AS daily_rank FROM t_ne_perf_kpi k JOIN t_network_element ne ON k.ne_id = ne.ne_id WHERE k.collect_time >= NOW() - INTERVAL '7 days' GROUP BY ne.ne_name, DATE(k.collect_time) ) ranked WHERE daily_rank <= 3 ORDER BY collect_date DESC, daily_rank;",
+    "pattern": "窗口函数",
+    "tables": [
+      "t_ne_perf_kpi",
+      "t_network_element"
+    ]
+  },
+  {
+    "id": "FS36",
+    "question": "对每个VPN业务，按天计算平均端到端时延，并用LAG函数计算与前一天的时延变化量",
+    "sql": "SELECT vpn_name, collect_date, avg_latency_ms, ROUND(avg_latency_ms - LAG(avg_latency_ms) OVER (PARTITION BY vpn_name ORDER BY collect_date), 2) AS latency_change_ms FROM ( SELECT v.vpn_name, DATE(k.collect_time) AS collect_date, ROUND(AVG(k.e2e_latency_avg_ms), 2) AS avg_latency_ms FROM t_l3vpn_service v JOIN t_vpn_sla_kpi k ON v.vpn_id = k.vpn_id WHERE k.collect_time >= NOW() - INTERVAL '7 days' GROUP BY v.vpn_name, DATE(k.collect_time) ) daily_latency ORDER BY vpn_name, collect_date;",
+    "pattern": "窗口函数",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_sla_kpi"
+    ]
+  },
+  {
+    "id": "FS37",
+    "question": "对每个厂商的设备，按最近24小时平均内存利用率排名，显示排名",
+    "sql": "SELECT ne.vendor, ne.ne_name, ROUND(AVG(k.memory_usage_avg_pct), 2) AS avg_mem_pct, ROW_NUMBER() OVER (PARTITION BY ne.vendor ORDER BY AVG(k.memory_usage_avg_pct) DESC) AS vendor_rank FROM t_network_element ne JOIN t_ne_perf_kpi k ON ne.ne_id = k.ne_id WHERE k.collect_time >= NOW() - INTERVAL '1 days' GROUP BY ne.vendor, ne.ne_name ORDER BY ne.vendor, vendor_rank;",
+    "pattern": "窗口函数",
+    "tables": [
+      "t_network_element",
+      "t_ne_perf_kpi"
+    ]
+  },
+  {
+    "id": "FS38",
+    "question": "将每台设备最近24小时的平均CPU利用率划分为三个级别：高负载(>80%)、中负载(50%-80%)、低负载(<50%)，统计各级别设备数量",
+    "sql": "SELECT load_level, COUNT(*) AS device_count FROM ( SELECT ne.ne_id, CASE WHEN AVG(k.cpu_usage_avg_pct) > 80 THEN '高负载' WHEN AVG(k.cpu_usage_avg_pct) >= 50 THEN '中负载' ELSE '低负载' END AS load_level FROM t_network_element ne JOIN t_ne_perf_kpi k ON ne.ne_id = k.ne_id WHERE k.collect_time >= NOW() - INTERVAL '1 days' GROUP BY ne.ne_id ) dev_load GROUP BY load_level ORDER BY CASE load_level WHEN '高负载' THEN 1 WHEN '中负载' THEN 2 ELSE 3 END;",
+    "pattern": "CASE WHEN",
+    "tables": [
+      "t_network_element",
+      "t_ne_perf_kpi"
+    ]
+  },
+  {
+    "id": "FS39",
+    "question": "统计每个VPN业务最近一周的SLA违约类型分布（时延不达标、抖动不达标、丢包不达标各多少次）",
+    "sql": "SELECT v.vpn_name, SUM(CASE WHEN k.sla_latency_met = FALSE THEN 1 ELSE 0 END) AS latency_violations, SUM(CASE WHEN k.sla_jitter_met = FALSE THEN 1 ELSE 0 END) AS jitter_violations, SUM(CASE WHEN k.sla_loss_met = FALSE THEN 1 ELSE 0 END) AS loss_violations FROM t_l3vpn_service v JOIN t_vpn_sla_kpi k ON v.vpn_id = k.vpn_id WHERE k.collect_time >= NOW() - INTERVAL '7 days' GROUP BY v.vpn_name ORDER BY (SUM(CASE WHEN k.sla_latency_met = FALSE THEN 1 ELSE 0 END) + SUM(CASE WHEN k.sla_jitter_met = FALSE THEN 1 ELSE 0 END) + SUM(CASE WHEN k.sla_loss_met = FALSE THEN 1 ELSE 0 END)) DESC;",
+    "pattern": "CASE WHEN",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_sla_kpi"
+    ]
+  },
+  {
+    "id": "FS40",
+    "question": "找出承载VPN业务数量超过平均值的PE设备，显示设备名称和承载VPN数量",
+    "sql": "SELECT ne.ne_name, ne.vendor, COUNT(DISTINCT b.vpn_id) AS vpn_count FROM t_network_element ne JOIN t_vpn_pe_binding b ON ne.ne_id = b.ne_id GROUP BY ne.ne_name, ne.vendor HAVING COUNT(DISTINCT b.vpn_id) > ( SELECT AVG(vpn_cnt) FROM ( SELECT COUNT(DISTINCT vpn_id) AS vpn_cnt FROM t_vpn_pe_binding GROUP BY ne_id ) sub ) ORDER BY vpn_count DESC;",
+    "pattern": "子查询",
+    "tables": [
+      "t_network_element",
+      "t_vpn_pe_binding"
+    ]
+  }
+]

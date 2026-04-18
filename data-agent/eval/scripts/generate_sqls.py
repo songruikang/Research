@@ -1,5 +1,5 @@
 """
-NL2SQL 生成器 v3 — 4 组 AB 实验 + 简陋版 Pipeline
+NL2SQL 生成器 v4 — 6 组 AB 实验 + Few-shot 检索
 
 Pipeline 流程 (Schema Linking 模式):
   Phase A: 工程预处理（零 LLM）
@@ -8,17 +8,18 @@ Pipeline 流程 (Schema Linking 模式):
     A3. 列裁剪（只保留匹配的列 + PK/FK + 状态列）
     A4. JOIN 路径推导（从 FK 关系生成提示）
     A5. 查询模式识别（聚合/排名/趋势/对比/分布）
+    A6. Few-shot 检索（关键词相似度 → top-3）
   Phase B: Prompt 组装
   Phase C: LLM 调用（1 次）
   Phase D: 工程后处理（sqlglot 校验）
 
-用法: python generate_sqls.py  — 生成 4 组预处理数据供 SubAgent 使用
+用法: python eval/scripts/generate_sqls.py  — 生成 6 组预处理数据供 SubAgent 使用
 """
 import json, re
 from pathlib import Path
 from datetime import datetime
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MDL_PATH = PROJECT_ROOT / "telecom" / "input" / "telecom_mdl.json"
 TEST_PATH = PROJECT_ROOT / "eval" / "telecom_test_cases_100.json"
 
@@ -255,10 +256,41 @@ def detect_query_pattern(question: str) -> str | None:
     return "+".join(detected) if detected else None
 
 
+# ─── Few-shot 检索 ───
+
+FEW_SHOT_PATH = PROJECT_ROOT / "eval" / "few_shot_pairs.json"
+
+
+def load_few_shot_index() -> list[dict] | None:
+    """加载 few-shot 库并预计算关键词索引"""
+    if not FEW_SHOT_PATH.exists():
+        return None
+    with open(FEW_SHOT_PATH) as f:
+        pairs = json.load(f)
+    for p in pairs:
+        p["_keywords"] = _expand_keywords(p["question"])
+    return pairs
+
+
+def retrieve_few_shot(question: str, fs_index: list[dict], top_k: int = 3) -> list[dict]:
+    """Phase A6: 关键词相似度检索 top-k few-shot 示例"""
+    q_kw = _expand_keywords(question)
+    scored = []
+    for p in fs_index:
+        overlap = len(q_kw & p["_keywords"])
+        union = len(q_kw | p["_keywords"])
+        # Jaccard 相似度
+        score = overlap / union if union > 0 else 0
+        scored.append((score, p))
+    scored.sort(key=lambda x: -x[0])
+    return [{"question": s[1]["question"], "sql": s[1]["sql"]} for s in scored[:top_k]]
+
+
 # ─── 完整 Pipeline ───
 
 def run_pipeline(question: str, mdl: dict, schema_index: dict,
-                 use_schema_linking: bool, knowledge: str | None) -> dict:
+                 use_schema_linking: bool, knowledge: str | None,
+                 few_shot_examples: list[dict] | None = None) -> dict:
     """运行完整预处理 pipeline，返回组装好的 prompt 上下文"""
     result = {"question": question}
 
@@ -291,6 +323,13 @@ def run_pipeline(question: str, mdl: dict, schema_index: dict,
     if use_schema_linking and join_paths:
         prompt_parts.append("### JOIN PATHS ###\n" + "\n".join(join_paths))
 
+    if few_shot_examples:
+        fs_lines = []
+        for sample in few_shot_examples:
+            fs_lines.append(f"Question:\n{sample['question']}\nSQL:\n{sample['sql']}")
+        prompt_parts.append("### SQL SAMPLES ###\n" + "\n\n".join(fs_lines))
+        result["few_shot_count"] = len(few_shot_examples)
+
     if pattern:
         prompt_parts.append(f"### QUERY PATTERN ###\n检测到的查询模式: {pattern}")
 
@@ -305,41 +344,53 @@ def run_pipeline(question: str, mdl: dict, schema_index: dict,
     return result
 
 
-# ─── 主流程：生成 4 组预处理数据 ───
+# ─── 主流程：生成 6 组预处理数据 ───
 
 def main():
     mdl = load_mdl()
     schema_index = build_schema_index(mdl)
+    fs_index = load_few_shot_index()
 
     with open(TEST_PATH) as f:
         cases = json.load(f)
 
     configs = {
-        "A": {"schema_linking": False, "knowledge": False, "name": "fullschema_no_knowledge"},
-        "B": {"schema_linking": False, "knowledge": True,  "name": "fullschema_with_knowledge"},
-        "C": {"schema_linking": True,  "knowledge": False, "name": "schemalink_no_knowledge"},
-        "D": {"schema_linking": True,  "knowledge": True,  "name": "schemalink_with_knowledge"},
+        "A": {"schema_linking": False, "knowledge": False, "few_shot": False, "name": "fullschema_no_knowledge"},
+        "B": {"schema_linking": False, "knowledge": True,  "few_shot": False, "name": "fullschema_with_knowledge"},
+        "C": {"schema_linking": True,  "knowledge": False, "few_shot": False, "name": "schemalink_no_knowledge"},
+        "D": {"schema_linking": True,  "knowledge": True,  "few_shot": False, "name": "schemalink_with_knowledge"},
+        "E": {"schema_linking": False, "knowledge": False, "few_shot": True,  "name": "fullschema_fewshot"},
+        "F": {"schema_linking": False, "knowledge": True,  "few_shot": True,  "name": "fullschema_fewshot_knowledge"},
     }
 
-    # 生成 questions_only（无 expected_sql）
+    # 生成 questions_only（无 expected_sql）→ .generated/
+    gen_dir = PROJECT_ROOT / "eval" / ".generated"
+    gen_dir.mkdir(exist_ok=True)
     questions_only = [{k: c[k] for k in ["id", "difficulty", "question", "implicit_knowledge"]} for c in cases]
-    with open(PROJECT_ROOT / "eval" / "questions_only.json", "w") as f:
+    with open(gen_dir / "questions_only.json", "w") as f:
         json.dump(questions_only, f, ensure_ascii=False, indent=2)
 
     # 为每组配置生成 per-question prompt
     for cfg_key, cfg in configs.items():
+        if cfg["few_shot"] and not fs_index:
+            print(f"[{cfg_key}] SKIP — few_shot_pairs.json not found")
+            continue
+
         prompts = {}
         stats = {"total_ddl_chars": 0, "avg_tables": 0}
         for c in cases:
             qid = c["id"]
             knowledge = c["implicit_knowledge"] if cfg["knowledge"] else None
-            result = run_pipeline(c["question"], mdl, schema_index, cfg["schema_linking"], knowledge)
+            fs_examples = retrieve_few_shot(c["question"], fs_index) if cfg["few_shot"] else None
+            result = run_pipeline(c["question"], mdl, schema_index, cfg["schema_linking"], knowledge, fs_examples)
             prompts[qid] = {
                 "user_prompt": result["user_prompt"],
                 "selected_tables": result["selected_tables"],
                 "query_pattern": result["query_pattern"],
                 "ddl_chars": result["ddl_chars"],
             }
+            if cfg["few_shot"]:
+                prompts[qid]["few_shot_count"] = result.get("few_shot_count", 0)
             stats["total_ddl_chars"] += result["ddl_chars"]
             stats["avg_tables"] += len(result["selected_tables"])
 
@@ -352,19 +403,23 @@ def main():
                 "name": cfg["name"],
                 "schema_linking": cfg["schema_linking"],
                 "knowledge": cfg["knowledge"],
+                "few_shot": cfg["few_shot"],
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "stats": stats,
             },
             "prompts": prompts,
         }
-        path = PROJECT_ROOT / "eval" / f"prompts_{cfg['name']}.json"
+        path = gen_dir / f"prompts_{cfg['name']}.json"
         with open(path, "w") as f:
             json.dump(output, f, ensure_ascii=False, indent=2)
-        print(f"[{cfg_key}] {cfg['name']}: avg {stats['avg_tables']} tables, {stats['avg_ddl_chars']} chars/prompt → {path.name}")
+        label = f"avg {stats['avg_tables']} tables, {stats['avg_ddl_chars']} chars/prompt"
+        if cfg["few_shot"]:
+            label += ", +few-shot"
+        print(f"[{cfg_key}] {cfg['name']}: {label} → {path.name}")
 
-    # 生成 full DDL 文件
+    # 生成 full DDL 文件 → .generated/
     full_ddl = mdl_to_ddl(mdl)
-    with open(PROJECT_ROOT / "eval" / "full_ddl.sql", "w") as f:
+    with open(gen_dir / "full_ddl.sql", "w") as f:
         f.write(full_ddl)
     print(f"\nfull_ddl.sql: {len(full_ddl)} chars")
 
