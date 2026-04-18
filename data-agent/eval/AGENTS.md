@@ -28,7 +28,6 @@ eval/
 └── .generated/                  # 脚本生成物（不提交、不删除）
     ├── prompts_*.json           #   generate_prompts.py 生成
     ├── eval_results_*.json      #   run_eval.py 生成（每题详细评分）
-    ├── few_shot_embeddings.json #   few-shot embedding 缓存
     ├── full_ddl.sql             #   generate_prompts.py 生成
     └── questions_only.json      #   generate_prompts.py 生成
 ```
@@ -188,8 +187,8 @@ python eval/scripts/generate_sqls.py \
 当前使用 DAIL-SQL 风格检索：**TF-IDF 加权相似度 + SQL 骨架多样性重排**。
 - Step 1: 对问题做 TF-IDF 加权关键词匹配，取 top-10 候选
 - Step 2: 用 sqlglot 提取 SQL 骨架，贪心选择结构最不同的 top-3
-- 如果 Ollama 可用，自动使用 nomic-embed-text embedding 替代 TF-IDF（当前实验显示 TF-IDF 对中文领域更优）
-- Ollama 不可用时自动 fallback 到关键词匹配
+- 纯 Python 实现，无外部依赖（不需要 Ollama 或 embedding 模型）
+- 实验验证 TF-IDF 对中文电信领域优于通用 embedding 模型（实验 8 vs 9）
 
 ### SQL 文件格式（`results/all_sqls.json`）
 
