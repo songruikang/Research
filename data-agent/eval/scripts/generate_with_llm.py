@@ -2,34 +2,38 @@
 批量调用 LLM 生成 SQL — 用于非 Claude Code 环境（如公司 Ubuntu + Qwen3 32B）
 
 用法:
-  # OpenAI 兼容 API（Qwen3 32B via vLLM/Ollama）
+  # 全量跑 6 组配置（挂机模式，适合过夜）
   python eval/scripts/generate_with_llm.py \
     --model openai/qwen3-32b \
     --api-base http://10.220.239.55:8000/v1 \
-    --prompt-config E \
-    --label "Qwen3-32B + Few-shot"
+    --all
+
+  # 只跑指定配置
+  python eval/scripts/generate_with_llm.py \
+    --model openai/qwen3-32b \
+    --api-base http://10.220.239.55:8000/v1 \
+    --prompt-config E
 
   # Ollama 本地模型
   python eval/scripts/generate_with_llm.py \
     --model ollama/qwen3:8b \
-    --prompt-config E \
-    --label "Qwen3-8B + Few-shot"
+    --prompt-config E
 
-  # 指定题目范围（调试用）
+  # 调试：只跑 10 题
   python eval/scripts/generate_with_llm.py \
     --model ollama/qwen3:8b \
     --prompt-config E \
-    --label "test" \
     --range Q01-Q10
 
 输入:
-  .generated/prompts_{config_name}.json — 由 generate_sqls.py 生成的 prompt 文件
+  .generated/prompts_{config}.json — 由 generate_sqls.py 生成
 
 输出:
   results/all_sqls.json — 自动追加新实验组
+  .generated/progress_{model}_{config}.json — 断点续跑进度文件
 """
 
-import json, sys, re, time, argparse
+import json, sys, re, time, argparse, traceback
 from pathlib import Path
 from datetime import datetime
 
@@ -45,6 +49,15 @@ CONFIG_NAMES = {
     "D": "schemalink_with_knowledge",
     "E": "fullschema_fewshot",
     "F": "fullschema_fewshot_knowledge",
+}
+
+CONFIG_LABELS = {
+    "A": "全量Schema 无知识",
+    "B": "全量Schema 有知识",
+    "C": "Schema Linking 无知识",
+    "D": "Schema Linking 有知识",
+    "E": "全量Schema + Few-shot",
+    "F": "全量Schema + Few-shot + 知识",
 }
 
 SYSTEM_PROMPT = """你是一个电信网络管理系统的 SQL 专家。根据给定的数据库 Schema 和用户问题，生成一条精确的 SQL 查询语句。
@@ -70,7 +83,7 @@ def extract_sql(text: str) -> str:
 
 
 def call_openai_compatible(api_base: str, model: str, api_key: str,
-                            system: str, user: str) -> str:
+                            system: str, user: str, timeout: int = 120) -> str:
     """调用 OpenAI 兼容 API"""
     import urllib.request
     url = f"{api_base.rstrip('/')}/chat/completions"
@@ -91,12 +104,12 @@ def call_openai_compatible(api_base: str, model: str, api_key: str,
             "Authorization": f"Bearer {api_key}",
         },
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         data = json.loads(resp.read())
     return data["choices"][0]["message"]["content"]
 
 
-def call_ollama(model: str, system: str, user: str) -> str:
+def call_ollama(model: str, system: str, user: str, timeout: int = 120) -> str:
     """调用 Ollama API"""
     import urllib.request
     url = "http://localhost:11434/api/chat"
@@ -113,94 +126,183 @@ def call_ollama(model: str, system: str, user: str) -> str:
         data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         data = json.loads(resp.read())
     return data["message"]["content"]
 
 
 def generate_sql(model: str, api_base: str, api_key: str,
-                  user_prompt: str) -> str:
+                  user_prompt: str, timeout: int = 120) -> str:
     """根据模型前缀选择调用方式"""
     if model.startswith("ollama/"):
-        text = call_ollama(model, SYSTEM_PROMPT, user_prompt)
+        text = call_ollama(model, SYSTEM_PROMPT, user_prompt, timeout)
     else:
-        text = call_openai_compatible(api_base, model, api_key, SYSTEM_PROMPT, user_prompt)
+        text = call_openai_compatible(api_base, model, api_key, SYSTEM_PROMPT, user_prompt, timeout)
     return extract_sql(text)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="批量调用 LLM 生成 SQL")
-    parser.add_argument("--model", required=True, help="模型名 (如 openai/qwen3-32b, ollama/qwen3:8b)")
-    parser.add_argument("--api-base", default="http://localhost:8000/v1", help="OpenAI 兼容 API 地址")
-    parser.add_argument("--api-key", default="none", help="API key (Ollama 不需要)")
-    parser.add_argument("--prompt-config", required=True, choices=list(CONFIG_NAMES.keys()), help="Prompt 配置 (A-F)")
-    parser.add_argument("--label", required=True, help="实验标签（写入 all_sqls.json）")
-    parser.add_argument("--range", default=None, help="题目范围 (如 Q01-Q10)，默认全部")
-    args = parser.parse_args()
-
-    # 加载 prompt
-    config_name = CONFIG_NAMES[args.prompt_config]
+def run_config(model: str, api_base: str, api_key: str, config: str,
+               timeout: int, max_retries: int, q_range: tuple | None = None) -> dict:
+    """运行一个配置的全部题目，支持断点续跑"""
+    config_name = CONFIG_NAMES[config]
     prompt_path = GENERATED_DIR / f"prompts_{config_name}.json"
     if not prompt_path.exists():
-        print(f"ERROR: {prompt_path} not found. 先跑 python eval/scripts/generate_sqls.py")
-        sys.exit(1)
+        print(f"  [SKIP] {prompt_path.name} not found")
+        return {}
 
     with open(prompt_path) as f:
         data = json.load(f)
     prompts = data["prompts"]
 
     # 题目范围过滤
-    if args.range:
-        m = re.match(r'Q(\d+)-Q(\d+)', args.range)
-        if m:
-            start, end = int(m.group(1)), int(m.group(2))
-            prompts = {k: v for k, v in prompts.items()
-                       if start <= int(k[1:]) <= end}
+    if q_range:
+        start, end = q_range
+        prompts = {k: v for k, v in prompts.items()
+                   if start <= int(k[1:]) <= end}
 
-    print(f"Model: {args.model}")
-    print(f"Config: {args.prompt_config} ({config_name})")
-    print(f"Questions: {len(prompts)}")
-    print()
+    # 断点续跑：加载进度
+    model_short = model.split("/")[-1].replace(":", "_")
+    progress_path = GENERATED_DIR / f"progress_{model_short}_{config}.json"
+    done = {}
+    if progress_path.exists():
+        with open(progress_path) as f:
+            done = json.load(f)
+        print(f"  从断点恢复: {len(done)} 题已完成")
 
-    # 逐题生成
-    results = {}
+    # 统计
+    total = len(prompts)
+    success = sum(1 for v in done.values() if not v.startswith("-- ERROR"))
+    errors = []
+
     for i, (qid, info) in enumerate(sorted(prompts.items()), 1):
-        try:
-            sql = generate_sql(args.model, args.api_base, args.api_key, info["user_prompt"])
-            results[qid] = sql
-            print(f"  {qid} ({i}/{len(prompts)}) ✓")
-        except Exception as e:
-            print(f"  {qid} ({i}/{len(prompts)}) ✗ {str(e)[:80]}")
-            results[qid] = f"-- ERROR: {e}"
-            time.sleep(2)
+        if qid in done:
+            continue
 
-    # 追加到 all_sqls.json
+        retries = 0
+        while retries <= max_retries:
+            try:
+                sql = generate_sql(model, api_base, api_key, info["user_prompt"], timeout)
+                done[qid] = sql
+                success += 1
+                print(f"  {qid} ({i}/{total}) ✓")
+                break
+            except Exception as e:
+                retries += 1
+                err_msg = str(e)[:100]
+                if retries <= max_retries:
+                    wait = min(retries * 5, 30)
+                    print(f"  {qid} ({i}/{total}) 重试 {retries}/{max_retries} (等待{wait}s) — {err_msg}")
+                    time.sleep(wait)
+                else:
+                    done[qid] = f"-- ERROR: {e}"
+                    errors.append({"qid": qid, "error": err_msg})
+                    print(f"  {qid} ({i}/{total}) ✗ 放弃 — {err_msg}")
+
+        # 每题保存进度
+        with open(progress_path, "w") as f:
+            json.dump(done, f, ensure_ascii=False, indent=2)
+
+    # 完成后删除进度文件
+    if progress_path.exists():
+        progress_path.unlink()
+
+    return {"results": done, "errors": errors, "success": success, "total": total}
+
+
+def save_to_all_sqls(results: dict, model: str, config: str, label: str):
+    """追加结果到 all_sqls.json"""
     sqls_path = RESULTS_DIR / "all_sqls.json"
     with open(sqls_path) as f:
         all_data = json.load(f)
 
-    model_short = args.model.split("/")[-1]
+    config_name = CONFIG_NAMES[config]
+    model_short = model.split("/")[-1]
     all_data["experiments"].append({
-        "label": args.label,
+        "label": label,
         "model": model_short,
         "schema": "full" if "fullschema" in config_name else "schemalink",
         "few_shot": "fewshot" in config_name,
         "knowledge": "knowledge" in config_name,
-        "retrieval": data["_meta"].get("retrieval", ""),
         "generated_at": datetime.now().strftime("%Y-%m-%d"),
     })
 
     for qid in sorted(all_data["sqls"].keys()):
-        all_data["sqls"][qid][args.label] = results.get(qid, "")
+        all_data["sqls"][qid][label] = results.get(qid, "")
 
     with open(sqls_path, "w") as f:
         json.dump(all_data, f, ensure_ascii=False, indent=2)
 
-    success = sum(1 for v in results.values() if not v.startswith("-- ERROR"))
-    print(f"\n完成: {success}/{len(results)} 成功")
-    print(f"结果已追加到 {sqls_path}")
-    print(f"实验索引: {len(all_data['experiments']) - 1}")
-    print(f"\n下一步: python eval/scripts/run_eval.py --exp {len(all_data['experiments']) - 1}")
+    return len(all_data["experiments"]) - 1
+
+
+def main():
+    parser = argparse.ArgumentParser(description="批量调用 LLM 生成 SQL")
+    parser.add_argument("--model", required=True, help="模型名 (如 openai/qwen3-32b, ollama/qwen3:8b)")
+    parser.add_argument("--api-base", default="http://localhost:8000/v1", help="OpenAI 兼容 API 地址")
+    parser.add_argument("--api-key", default="none", help="API key")
+    parser.add_argument("--all", action="store_true", help="全量跑 6 组配置 (A-F)")
+    parser.add_argument("--prompt-config", choices=list(CONFIG_NAMES.keys()), help="Prompt 配置 (A-F)")
+    parser.add_argument("--label", default=None, help="实验标签（--all 模式自动生成）")
+    parser.add_argument("--range", default=None, help="题目范围 (如 Q01-Q10)")
+    parser.add_argument("--timeout", type=int, default=120, help="单题超时秒数 (默认 120)")
+    parser.add_argument("--max-retries", type=int, default=3, help="单题最大重试次数 (默认 3)")
+    args = parser.parse_args()
+
+    if not args.all and not args.prompt_config:
+        parser.error("必须指定 --all 或 --prompt-config")
+
+    # 解析题目范围
+    q_range = None
+    if args.range:
+        m = re.match(r'Q(\d+)-Q(\d+)', args.range)
+        if m:
+            q_range = (int(m.group(1)), int(m.group(2)))
+
+    # 确定要跑的配置
+    configs = list(CONFIG_NAMES.keys()) if args.all else [args.prompt_config]
+    model_short = args.model.split("/")[-1]
+
+    print(f"{'=' * 60}")
+    print(f"模型: {args.model}")
+    print(f"配置: {', '.join(configs)}")
+    print(f"超时: {args.timeout}s/题, 重试: {args.max_retries}次")
+    print(f"开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"{'=' * 60}")
+
+    all_errors = []
+    exp_indices = []
+
+    for config in configs:
+        label = args.label if args.label else f"{model_short} {CONFIG_LABELS[config]}"
+
+        print(f"\n{'─' * 60}")
+        print(f"[{config}] {label}")
+        print(f"{'─' * 60}")
+
+        result = run_config(args.model, args.api_base, args.api_key,
+                            config, args.timeout, args.max_retries, q_range)
+        if not result:
+            continue
+
+        exp_idx = save_to_all_sqls(result["results"], args.model, config, label)
+        exp_indices.append(exp_idx)
+
+        print(f"  成功: {result['success']}/{result['total']}")
+        if result["errors"]:
+            print(f"  失败: {len(result['errors'])} 题")
+            all_errors.extend(result["errors"])
+
+    # 汇总
+    print(f"\n{'=' * 60}")
+    print(f"全部完成: {len(exp_indices)} 组实验")
+    print(f"结束时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    if all_errors:
+        print(f"\n失败记录 ({len(all_errors)} 题):")
+        for e in all_errors:
+            print(f"  {e['qid']}: {e['error']}")
+    if exp_indices:
+        idx_str = " ".join(str(i) for i in exp_indices)
+        print(f"\n下一步: python eval/scripts/run_eval.py --exp {idx_str}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,16 @@
 """
-验证 few-shot pairs 的 SQL 可执行性
-用 DuckDB + mock 数据做 dry-run，标记 pass/fail
+验证 few-shot 示例库中每条 SQL 的可执行性
+
+用法:
+  python eval/scripts/verify_few_shot.py
+
+输入:
+  eval/few_shot_pairs.json               — few-shot 示例库（43 条）
+  telecom/output/telecom_nms.duckdb      — Mock 数据库
+
+输出（终端）:
+  逐条显示 pass/fail + 返回行数
+  汇总: 总数 / 通过数 / 失败数 / 0 行数
 """
 
 import json

@@ -1,17 +1,16 @@
 """
-一键评测全部实验 — 生成 prompt + 评测已有 SQL + 输出报告
+一键评测（组合调用 generate_sqls.py + run_eval.py）
 
 用法:
   python eval/scripts/run_all.py              # 评测 all_sqls.json 中所有实验
-  python eval/scripts/run_all.py --regen      # 先重新生成 prompt 再评测
+  python eval/scripts/run_all.py --regen      # 先重新生成 6 组 prompt 再评测
   python eval/scripts/run_all.py --exp 0 4 8  # 只评测指定实验
 
-流程:
-  1. [可选] 重新生成 .generated/prompts_*.json
-  2. 加载 results/all_sqls.json 中所有实验
-  3. 逐组评测，输出终端报告
-  4. 保存详细结果到 .generated/eval_results_{timestamp}.json
-  5. 保存 MD 报告到 results/report_{timestamp}.md
+参数:
+  --regen            先跑 generate_sqls.py 重新生成 prompt 文件
+  --exp N [N ...]    传递给 run_eval.py，指定评测哪些实验
+
+输入/输出: 同 generate_sqls.py 和 run_eval.py
 """
 
 import sys, subprocess

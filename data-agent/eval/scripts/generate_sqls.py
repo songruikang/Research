@@ -1,19 +1,29 @@
 """
-NL2SQL 生成器 v4 — 6 组 AB 实验 + Few-shot 检索
+为 100 道评测题生成 6 组 LLM Prompt 文件（A-F 配置）
 
-Pipeline 流程 (Schema Linking 模式):
-  Phase A: 工程预处理（零 LLM）
-    A1. 关键词提取 + 领域同义词扩展
-    A2. 表选择（关键词→表描述匹配 + FK 图扩展）
-    A3. 列裁剪（只保留匹配的列 + PK/FK + 状态列）
-    A4. JOIN 路径推导（从 FK 关系生成提示）
-    A5. 查询模式识别（聚合/排名/趋势/对比/分布）
-    A6. Few-shot 检索（关键词相似度 → top-3）
-  Phase B: Prompt 组装
-  Phase C: LLM 调用（1 次）
-  Phase D: 工程后处理（sqlglot 校验）
+每组配置对应不同的 Schema 策略 / Few-shot / 知识注入组合，
+输出的 prompt 文件供后续 LLM 生成 SQL 使用（Sub-Agent 或 generate_with_llm.py）。
 
-用法: python eval/scripts/generate_sqls.py  — 生成 6 组预处理数据供 SubAgent 使用
+用法:
+  python eval/scripts/generate_sqls.py
+
+输入:
+  telecom/input/telecom_mdl.json         — Schema 定义（14 张表）
+  eval/telecom_test_cases_100.json       — 100 道评测题（question + implicit_knowledge）
+  eval/few_shot_pairs.json               — 43 条 few-shot 示例
+
+输出（写入 eval/.generated/）:
+  prompts_fullschema_no_knowledge.json    — A: 全量 Schema，无知识
+  prompts_fullschema_with_knowledge.json  — B: 全量 Schema，有知识
+  prompts_schemalink_no_knowledge.json    — C: Schema Linking，无知识
+  prompts_schemalink_with_knowledge.json  — D: Schema Linking，有知识
+  prompts_fullschema_fewshot.json         — E: 全量 Schema + Few-shot（推荐）
+  prompts_fullschema_fewshot_knowledge.json — F: 全量 Schema + Few-shot + 知识
+  questions_only.json                     — 100 题纯文本（不含 expected_sql）
+  full_ddl.sql                            — 完整 DDL（调试用）
+
+每个 prompt 文件结构:
+  {"_meta": {...}, "prompts": {"Q01": {"user_prompt": "...", ...}, ...}}
 """
 import json, re
 from pathlib import Path

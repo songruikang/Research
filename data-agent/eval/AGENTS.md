@@ -22,7 +22,8 @@ eval/
 │
 ├── results/                     # 实验产出（提交）
 │   ├── all_sqls.json            #   所有实验的 SQL（唯一文件）
-│   └── report_{YYYYMMDD_HHMM}.md  # 评测报告（带时间戳）
+│   ├── report_{YYYYMMDD_HHMM}.md  # 评测报告（带时间戳）
+│   └── bad_case_analysis.md     #   错题分析（人工/Agent 分析产出）
 │
 └── .generated/                  # 脚本生成物（不提交、不删除）
     ├── prompts_*.json           #   generate_sqls.py 生成
@@ -85,13 +86,13 @@ python eval/scripts/verify_few_shot.py
 
 ### 脚本输入输出一览
 
-| 脚本 | 输入 | 输出 |
-|------|------|------|
-| `generate_sqls.py` | `telecom_test_cases_100.json` + `few_shot_pairs.json` + MDL | `.generated/prompts_*.json` (6个) |
-| `generate_with_llm.py` | `.generated/prompts_{config}.json` + LLM API | `results/all_sqls.json`（追加） |
-| `run_eval.py` | `results/all_sqls.json` + `telecom_test_cases_100.json` + DuckDB | `.generated/eval_results_*.json` + `results/report_*.md` |
-| `run_all.py` | 同上 | 同上（组合调用） |
-| `verify_few_shot.py` | `few_shot_pairs.json` + DuckDB | 终端输出 pass/fail |
+| 脚本 | 做什么 | 输入 | 输出 |
+|------|--------|------|------|
+| `generate_sqls.py` | 为 100 题生成 6 组 LLM Prompt 文件 | MDL + 评测集 + few-shot 库 | `.generated/prompts_*.json` (6个) |
+| `generate_with_llm.py` | 调用 LLM API 逐题生成 SQL | `.generated/prompts_{config}.json` + LLM API | `results/all_sqls.json`（追加） |
+| `run_eval.py` | 对比生成 SQL 与期望 SQL 的执行结果 | `results/all_sqls.json` + 评测集 + DuckDB | `results/report_*.md` + `.generated/eval_results_*.json` |
+| `run_all.py` | 一键组合（generate_sqls + run_eval） | 同上 | 同上 |
+| `verify_few_shot.py` | 验证 few-shot SQL 在 DuckDB 上可执行 | `few_shot_pairs.json` + DuckDB | 终端：逐条 pass/fail |
 
 ---
 
@@ -135,26 +136,36 @@ SQL 要求：
 用 `generate_with_llm.py` 调用 OpenAI 兼容 API 或 Ollama。
 
 ```bash
-# Qwen3 32B（公司 H100，vLLM 部署）
+# 全量跑 6 组配置（挂机模式，适合过夜）
 python eval/scripts/generate_with_llm.py \
   --model openai/qwen3-32b \
   --api-base http://10.220.239.55:8000/v1 \
-  --prompt-config E \
-  --label "Qwen3-32B + Few-shot"
+  --all
+
+# 只跑一个配置
+python eval/scripts/generate_with_llm.py \
+  --model openai/qwen3-32b \
+  --api-base http://10.220.239.55:8000/v1 \
+  --prompt-config E
 
 # Ollama 本地模型
 python eval/scripts/generate_with_llm.py \
   --model ollama/qwen3:8b \
-  --prompt-config E \
-  --label "Qwen3-8B test"
+  --prompt-config E
 
 # 调试：只跑 10 题
 python eval/scripts/generate_with_llm.py \
   --model ollama/qwen3:8b \
   --prompt-config E \
-  --label "debug" \
   --range Q01-Q10
 ```
+
+**容错机制：**
+- 单题失败自动重试（默认 3 次，`--max-retries`）
+- 每题完成后保存进度到 `.generated/progress_*.json`
+- 中断后重跑自动从断点恢复
+- 超时可调（`--timeout`，默认 120s）
+- `--all` 模式自动生成实验标签（如 `qwen3-32b 全量Schema + Few-shot`）
 
 脚本自动追加到 `all_sqls.json`，完成后提示下一步的 `run_eval.py` 命令。
 
@@ -343,16 +354,14 @@ pip install duckdb sqlglot pyyaml
 # 1. 生成 prompt
 python eval/scripts/generate_sqls.py
 
-# 2. 用 Qwen3 32B 生成 SQL（配置 E = 全量 + Few-shot，效果最好的配置）
+# 2. 全量跑 6 组配置（挂机过夜，约 2-3 小时）
 python eval/scripts/generate_with_llm.py \
   --model openai/qwen3-32b \
   --api-base http://10.220.239.55:8000/v1 \
-  --prompt-config E \
-  --label "Qwen3-32B + Few-shot"
+  --all
 
-# 3. 评测（上一步完成后会提示实验索引）
-python eval/scripts/run_eval.py --exp <索引>
+# 如果中断了，重跑同一命令会自动从断点恢复
 
-# 或者一步评测所有已有实验
+# 3. 评测全部（上一步完成后会提示实验索引）
 python eval/scripts/run_all.py
 ```

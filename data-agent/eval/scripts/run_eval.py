@@ -1,12 +1,23 @@
 """
-统一评测脚本 — 加载 all_sqls.json → 选择实验组 → 执行评测 → 生成报告
+评测 all_sqls.json 中的实验，对比 LLM 生成的 SQL 与期望 SQL 的执行结果
 
 用法:
-  python eval/scripts/run_eval.py                    # 评测全部 6 组
-  python eval/scripts/run_eval.py --exp 0 1 4 5      # 只跑第 0/1/4/5 组
-  python eval/scripts/run_eval.py --exp 4             # 只跑第 4 组
+  python eval/scripts/run_eval.py                # 评测所有实验组
+  python eval/scripts/run_eval.py --exp 0 4      # 只评测第 0 和第 4 组
+  python eval/scripts/run_eval.py --exp 10       # 评测新追加的第 10 组
 
-实验索引对应关系见 results/all_sqls.json 中的 experiments 数组。
+参数:
+  --exp N [N ...]    指定要评测的实验索引（对应 all_sqls.json 中 experiments 数组的下标）
+                     不指定则评测全部实验
+
+输入:
+  eval/results/all_sqls.json             — 所有实验的 SQL（按 label 索引）
+  eval/telecom_test_cases_100.json       — 100 道评测题（含 expected_sql）
+  telecom/output/telecom_nms.duckdb      — Mock 数据库
+
+输出:
+  eval/results/report_{YYYYMMDD_HHMM}.md           — 评测报告（三级准确率 + 多维评分 + 对比分析）
+  eval/.generated/eval_results_{YYYYMMDD_HHMM}.json — 每题详细评分（verdict / match_level / component_scores）
 """
 import json, sys
 from pathlib import Path
