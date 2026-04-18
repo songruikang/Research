@@ -171,8 +171,11 @@ def run_config(model: str, api_base: str, api_key: str, config: str,
 
     # 统计
     total = len(prompts)
+    skipped = sum(1 for qid in prompts if qid in done)
     success = sum(1 for v in done.values() if not v.startswith("-- ERROR"))
     errors = []
+    start_time = time.time()
+    completed_this_run = 0
 
     for i, (qid, info) in enumerate(sorted(prompts.items()), 1):
         if qid in done:
@@ -181,10 +184,18 @@ def run_config(model: str, api_base: str, api_key: str, config: str,
         retries = 0
         while retries <= max_retries:
             try:
+                t0 = time.time()
                 sql = generate_sql(model, api_base, api_key, info["user_prompt"], timeout)
+                elapsed = time.time() - t0
                 done[qid] = sql
                 success += 1
-                print(f"  {qid} ({i}/{total}) ✓")
+                completed_this_run += 1
+
+                # 进度 + 预估剩余时间
+                remaining = total - i
+                avg_time = (time.time() - start_time) / completed_this_run
+                eta_min = remaining * avg_time / 60
+                print(f"  {qid} ({i}/{total}) ✓ {elapsed:.1f}s | 剩余 ~{eta_min:.0f}min")
                 break
             except Exception as e:
                 retries += 1
@@ -196,6 +207,7 @@ def run_config(model: str, api_base: str, api_key: str, config: str,
                 else:
                     done[qid] = f"-- ERROR: {e}"
                     errors.append({"qid": qid, "error": err_msg})
+                    completed_this_run += 1
                     print(f"  {qid} ({i}/{total}) ✗ 放弃 — {err_msg}")
 
         # 每题保存进度
@@ -262,9 +274,10 @@ def main():
     configs = list(CONFIG_NAMES.keys()) if args.all else [args.prompt_config]
     model_short = args.model.split("/")[-1]
 
+    total_questions = len(configs) * 100
     print(f"{'=' * 60}")
     print(f"模型: {args.model}")
-    print(f"配置: {', '.join(configs)}")
+    print(f"配置: {', '.join(configs)} ({len(configs)} 组 × 100 题 = {total_questions} 次调用)")
     print(f"超时: {args.timeout}s/题, 重试: {args.max_retries}次")
     print(f"开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'=' * 60}")
@@ -279,15 +292,17 @@ def main():
         print(f"[{config}] {label}")
         print(f"{'─' * 60}")
 
+        t_start = time.time()
         result = run_config(args.model, args.api_base, args.api_key,
                             config, args.timeout, args.max_retries, q_range)
         if not result:
             continue
 
+        elapsed_min = (time.time() - t_start) / 60
         exp_idx = save_to_all_sqls(result["results"], args.model, config, label)
         exp_indices.append(exp_idx)
 
-        print(f"  成功: {result['success']}/{result['total']}")
+        print(f"  成功: {result['success']}/{result['total']} | 耗时: {elapsed_min:.1f}min")
         if result["errors"]:
             print(f"  失败: {len(result['errors'])} 题")
             all_errors.extend(result["errors"])
