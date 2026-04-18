@@ -89,7 +89,7 @@ python eval/scripts/verify_few_shot.py
 | `generate_prompts.py` | 为 100 题生成 6 组 Prompt 文件 | MDL + 评测集 + few-shot 库 | `.generated/prompts_*.json` (6个) |
 | `generate_sqls.py` | 调用 LLM API 逐题生成 SQL | `.generated/prompts_{config}.json` + LLM API | `results/all_sqls.json`（追加） |
 | `run_eval.py` | 对比生成 SQL 与期望 SQL 的执行结果 | `results/all_sqls.json` + 评测集 + DuckDB | `results/report_*.md` + `.generated/eval_results_*.json` |
-| `run_all.py` | 一键组合（generate_prompts + run_eval） | 同上 | 同上 |
+| `run_all.py` | 一键全流程（generate_prompts → generate_sqls → run_eval） | 同上 + LLM API | 同上 |
 | `verify_few_shot.py` | 验证 few-shot SQL 在 DuckDB 上可执行 | `few_shot_pairs.json` + DuckDB | 终端：逐条 pass/fail |
 
 ---
@@ -341,25 +341,15 @@ python eval/scripts/generate_sqls.py \
 ```bash
 # 公司 Ubuntu 机器
 pip install duckdb sqlglot pyyaml
-
-# 如果用 vLLM 部署 Qwen3 32B
-# 确保 API 在 http://10.220.239.55:8000/v1 可访问
 ```
 
 ### 一键复测流程
 
 ```bash
-# 1. 生成 6 组 Prompt 文件
-python eval/scripts/generate_prompts.py
-
-# 2. 全量跑 6 组配置（挂机过夜，约 2-3 小时）
-python eval/scripts/generate_sqls.py \
-  --model openai/qwen3-32b \
-  --api-base http://10.220.239.55:8000/v1 \
-  --all
+# 一步到位：生成 Prompt → 调 Qwen3 32B 生成 SQL → 评测出报告
+python eval/scripts/run_all.py \
+  --model ollama_chat/qwen3:32b \
+  --api-base http://10.220.239.55:11434/v1
 
 # 如果中断了，重跑同一命令会自动从断点恢复
-
-# 3. 评测全部（上一步完成后会提示实验索引）
-python eval/scripts/run_all.py
 ```
