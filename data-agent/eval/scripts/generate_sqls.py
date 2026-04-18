@@ -11,7 +11,7 @@
   # 只跑指定配置
   python eval/scripts/generate_sqls.py \
     --model openai/qwen3-32b \
-    --api-base http://10.220.239.55:8000/v1 \
+    --api-base http://10.220.239.55:11343/v1 \
     --prompt-config E
 
   # Ollama 本地模型
@@ -109,10 +109,10 @@ def call_openai_compatible(api_base: str, model: str, api_key: str,
     return data["choices"][0]["message"]["content"]
 
 
-def call_ollama(model: str, system: str, user: str, timeout: int = 120) -> str:
+def call_ollama(api_base: str, model: str, system: str, user: str, timeout: int = 120) -> str:
     """调用 Ollama API"""
     import urllib.request
-    url = "http://localhost:11434/api/chat"
+    url = f"{api_base.rstrip('/')}/api/chat"
     payload = {
         "model": model.split("/", 1)[-1] if "/" in model else model,
         "messages": [
@@ -135,7 +135,7 @@ def generate_sql(model: str, api_base: str, api_key: str,
                   user_prompt: str, timeout: int = 120) -> str:
     """根据模型前缀选择调用方式"""
     if model.startswith("ollama/"):
-        text = call_ollama(model, SYSTEM_PROMPT, user_prompt, timeout)
+        text = call_ollama(api_base, model, SYSTEM_PROMPT, user_prompt, timeout)
     else:
         text = call_openai_compatible(api_base, model, api_key, SYSTEM_PROMPT, user_prompt, timeout)
     return extract_sql(text)
