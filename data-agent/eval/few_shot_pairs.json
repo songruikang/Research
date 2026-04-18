@@ -403,5 +403,39 @@
       "t_network_element",
       "t_vpn_pe_binding"
     ]
+  },
+  {
+    "id": "FS41",
+    "question": "统计每个区域PLATINUM业务的平均SLA达标率，先按VPN维度算达标率再按区域汇总",
+    "sql": "WITH vpn_met_rate AS ( SELECT v.vpn_id, v.vpn_name, s.region, ROUND(SUM(CASE WHEN k.sla_overall_met = TRUE THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS met_rate FROM t_l3vpn_service v JOIN t_vpn_pe_binding b ON v.vpn_id = b.vpn_id JOIN t_network_element ne ON b.ne_id = ne.ne_id JOIN t_site s ON ne.site_id = s.site_id JOIN t_vpn_sla_kpi k ON v.vpn_id = k.vpn_id WHERE v.service_level = 'PLATINUM' AND k.collect_time >= NOW() - INTERVAL '30 days' GROUP BY v.vpn_id, v.vpn_name, s.region ) SELECT region, COUNT(*) AS vpn_count, ROUND(AVG(met_rate), 2) AS avg_met_rate, ROUND(MIN(met_rate), 2) AS min_met_rate FROM vpn_met_rate GROUP BY region ORDER BY avg_met_rate ASC;",
+    "pattern": "CTE+二级聚合",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_pe_binding",
+      "t_network_element",
+      "t_site",
+      "t_vpn_sla_kpi"
+    ]
+  },
+  {
+    "id": "FS42",
+    "question": "查询每个客户所有VPN业务的月化丢包风险金额，先按VPN算平均丢包率再乘以月租费汇总到客户",
+    "sql": "WITH vpn_loss AS ( SELECT v.vpn_id, v.customer_name, v.monthly_fee, ROUND(AVG(k.e2e_packet_loss_pct), 4) AS avg_loss_pct FROM t_l3vpn_service v JOIN t_vpn_sla_kpi k ON v.vpn_id = k.vpn_id WHERE v.admin_status = 'ACTIVE' AND k.collect_time >= NOW() - INTERVAL '30 days' GROUP BY v.vpn_id, v.customer_name, v.monthly_fee ) SELECT customer_name, COUNT(*) AS vpn_count, ROUND(SUM(avg_loss_pct * monthly_fee), 2) AS total_risk_amount, ROUND(AVG(avg_loss_pct), 4) AS avg_loss_pct FROM vpn_loss GROUP BY customer_name ORDER BY total_risk_amount DESC;",
+    "pattern": "CTE+二级聚合",
+    "tables": [
+      "t_l3vpn_service",
+      "t_vpn_sla_kpi"
+    ]
+  },
+  {
+    "id": "FS43",
+    "question": "按站点统计最近24小时高负载设备的占比，先按设备算平均CPU利用率再按站点汇总超过80%的设备比例",
+    "sql": "WITH ne_cpu AS ( SELECT ne.ne_id, ne.ne_name, s.site_name, ROUND(AVG(k.cpu_usage_avg_pct), 2) AS avg_cpu_pct FROM t_network_element ne JOIN t_site s ON ne.site_id = s.site_id JOIN t_ne_perf_kpi k ON ne.ne_id = k.ne_id WHERE k.collect_time >= NOW() - INTERVAL '1 days' GROUP BY ne.ne_id, ne.ne_name, s.site_name ) SELECT site_name, COUNT(*) AS total_devices, SUM(CASE WHEN avg_cpu_pct > 80 THEN 1 ELSE 0 END) AS high_load_devices, ROUND(SUM(CASE WHEN avg_cpu_pct > 80 THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS high_load_pct FROM ne_cpu GROUP BY site_name ORDER BY high_load_pct DESC;",
+    "pattern": "CTE+二级聚合",
+    "tables": [
+      "t_network_element",
+      "t_site",
+      "t_ne_perf_kpi"
+    ]
   }
 ]

@@ -1,0 +1,122 @@
+# 列选择知识 — 告诉模型查询每张表时默认返回哪些列
+# 注入方式：写入 DDL 表注释，如 "-- 查询本表时默认返回: ne_id, ne_name, vendor, model, role"
+#
+# 列角色定义：
+#   identity: 标识列，任何查询都应返回（PK + 名称）
+#   context:  上下文列，查询本表信息时默认返回（核心业务属性）
+#   status:   状态列，查询状态/筛选时返回
+#   metric:   指标列，KPI 表特有，按查询需求选择性返回
+
+t_site:
+  identity: [site_id, site_name]
+  context: [site_type, region, city, tier]
+  status: [status]
+
+t_network_element:
+  identity: [ne_id, ne_name]
+  context: [ne_type, vendor, model, role]
+  status: [oper_status, admin_status]
+
+t_board:
+  identity: [board_id, board_name]
+  context: [ne_id, slot_number, board_type, port_type]
+  status: [oper_status, admin_status]
+
+t_interface:
+  identity: [if_id, if_name]
+  context: [ne_id, if_type, speed_mbps, ipv4_address]
+  status: [oper_status, admin_status]
+
+t_physical_link:
+  identity: [link_id, link_name]
+  context: [link_type, a_ne_id, z_ne_id, bandwidth_mbps]
+  status: [oper_status, admin_status]
+
+t_vrf_instance:
+  identity: [vrf_id, vrf_name]
+  context: [ne_id, route_distinguisher, address_family, service_type, customer_name]
+  status: [oper_status, admin_status]
+
+t_l3vpn_service:
+  identity: [vpn_id, vpn_name]
+  context: [vpn_type, customer_name, service_level, underlay_type, bandwidth_mbps]
+  status: [admin_status, oper_status, deploy_status]
+
+t_vpn_pe_binding:
+  identity: [binding_id]
+  context: [vpn_id, ne_id, vrf_id, if_id, pe_role, routing_protocol]
+  status: [oper_status, admin_status]
+
+t_srv6_policy:
+  identity: [policy_id, policy_name]
+  context: [source_ne_id, dest_ne_id, color, provision_type, sla_type]
+  status: [oper_status, admin_status]
+
+t_tunnel:
+  identity: [tunnel_id, tunnel_name]
+  context: [tunnel_type, source_ne_id, dest_ne_id, bandwidth_mbps]
+  status: [oper_status, admin_status]
+
+t_ne_perf_kpi:
+  identity: [kpi_id]
+  context: [ne_id, collect_time, granularity_min]
+  status: []
+  metric:
+    - cpu_usage_avg_pct
+    - cpu_usage_max_pct
+    - memory_usage_avg_pct
+    - memory_usage_max_pct
+    - temperature_avg_c
+    - power_consumption_w
+    - fib_usage_count
+    - bgp_peer_up_count
+    - alarm_critical_count
+    - alarm_major_count
+
+t_interface_perf_kpi:
+  identity: [kpi_id]
+  context: [if_id, ne_id, collect_time, granularity_min]
+  status: [oper_status]
+  metric:
+    - in_bandwidth_usage_pct
+    - out_bandwidth_usage_pct
+    - in_peak_rate_mbps
+    - out_peak_rate_mbps
+    - in_octets
+    - out_octets
+    - in_error_packets
+    - out_error_packets
+    - in_discard_packets
+    - out_discard_packets
+    - crc_error_count
+
+t_tunnel_perf_kpi:
+  identity: [kpi_id]
+  context: [tunnel_id, source_ne_id, dest_ne_id, collect_time, granularity_min]
+  status: [oper_status]
+  metric:
+    - latency_avg_ms
+    - latency_max_ms
+    - jitter_avg_ms
+    - jitter_max_ms
+    - packet_loss_rate_pct
+    - bandwidth_usage_pct
+    - rtt_avg_ms
+    - sla_violation
+
+t_vpn_sla_kpi:
+  identity: [kpi_id]
+  context: [vpn_id, pe_ne_id, remote_pe_ne_id, collect_time, granularity_min]
+  status: []
+  metric:
+    - e2e_latency_avg_ms
+    - e2e_latency_max_ms
+    - e2e_jitter_avg_ms
+    - e2e_packet_loss_pct
+    - availability_pct
+    - throughput_mbps
+    - sla_latency_met
+    - sla_jitter_met
+    - sla_loss_met
+    - sla_overall_met
+    - mos_score

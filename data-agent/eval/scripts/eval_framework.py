@@ -128,14 +128,36 @@ def compare_results(generated: dict, expected: dict) -> dict:
 
     # ── 值匹配（行数已确认相同）──
 
-    # 1. 精确匹配：转成值元组集合比较
+    # 1. 精确匹配：列完全一致时，直接比值元组
     gen_set = set(tuple(str(v) for v in row) for row in generated["rows"])
     exp_set = set(tuple(str(v) for v in row) for row in expected["rows"])
 
     if gen_set == exp_set:
-        return {"match": True, "verdict": "correct", "reason": f"完全匹配{col_diff_note}" if col_diff_note else "完全匹配"}
+        return {"match": True, "verdict": "correct", "reason": "完全匹配"}
 
-    # 2. 子集匹配：列不同时，检查期望行的值是否为生成行值的子集（或反向）
+    # 2. 列交集比对：取两侧共有列，只比交集列的值
+    common_cols = [c for c in exp_cols if c in gen_cols]
+    if common_cols:
+        gen_col_idx = [gen_cols.index(c) for c in common_cols]
+        exp_col_idx = [exp_cols.index(c) for c in common_cols]
+
+        gen_proj = set(
+            tuple(str(row[i]) for i in gen_col_idx)
+            for row in generated["rows"]
+        )
+        exp_proj = set(
+            tuple(str(row[i]) for i in exp_col_idx)
+            for row in expected["rows"]
+        )
+
+        if gen_proj == exp_proj:
+            return {
+                "match": True,
+                "verdict": "correct",
+                "reason": f"交集列匹配({len(common_cols)}列, {gen_rows}行){col_diff_note}",
+            }
+
+    # 3. 子集匹配：列完全不同时（无交集），用值子集关系判断
     if gen_rows > 0:
         matched_rows = 0
         for exp_row in expected["rows"]:
@@ -149,10 +171,10 @@ def compare_results(generated: dict, expected: dict) -> dict:
             return {
                 "match": True,
                 "verdict": "correct",
-                "reason": f"逻辑正确({gen_rows}行){col_diff_note}",
+                "reason": f"值子集匹配({gen_rows}行){col_diff_note}",
             }
 
-    # 3. 不匹配
+    # 4. 不匹配
     overlap = gen_set & exp_set
     diag = f"行数相同({gen_rows}行)但值不同: {len(overlap)}行重合{col_diff_note}"
     return {

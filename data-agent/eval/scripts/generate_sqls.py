@@ -18,7 +18,6 @@ Pipeline 流程 (Schema Linking 模式):
 import json, re
 from pathlib import Path
 from datetime import datetime
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MDL_PATH = PROJECT_ROOT / "telecom" / "input" / "telecom_mdl.json"
 TEST_PATH = PROJECT_ROOT / "eval" / "telecom_test_cases_100.json"
@@ -256,34 +255,148 @@ def detect_query_pattern(question: str) -> str | None:
     return "+".join(detected) if detected else None
 
 
-# ─── Few-shot 检索 ───
+# ─── Few-shot 检索（DAIL-SQL 风格：TF-IDF 相似度 + SQL 骨架多样性重排）───
 
 FEW_SHOT_PATH = PROJECT_ROOT / "eval" / "few_shot_pairs.json"
 
 
-def load_few_shot_index() -> list[dict] | None:
-    """加载 few-shot 库并预计算关键词索引"""
+def _extract_sql_skeleton(sql: str) -> str:
+    """用 sqlglot 提取 SQL 骨架：保留结构关键词，替换具体表/列/值为占位符"""
+    try:
+        import sqlglot
+        parsed = sqlglot.parse_one(sql, dialect="duckdb")
+        # 提取结构特征
+        features = []
+        sql_upper = sql.upper()
+        for kw in ["SELECT", "FROM", "WHERE", "JOIN", "LEFT JOIN", "GROUP BY",
+                    "HAVING", "ORDER BY", "LIMIT", "WITH", "UNION",
+                    "COUNT", "AVG", "SUM", "MAX", "MIN", "ROUND",
+                    "CASE", "ROW_NUMBER", "LAG", "LEAD", "RANK",
+                    "IN", "EXISTS", "NOT", "LIKE", "BETWEEN", "DISTINCT"]:
+            if kw in sql_upper:
+                features.append(kw)
+        # 统计 JOIN 数量
+        join_count = sql_upper.count(" JOIN ")
+        if join_count > 0:
+            features.append(f"JOIN×{join_count}")
+        # CTE 数量
+        cte_count = sql_upper.count(" AS (")
+        if cte_count > 0:
+            features.append(f"CTE×{cte_count}")
+        return "|".join(sorted(set(features)))
+    except Exception:
+        return sql[:50]
+
+
+OLLAMA_URL = "http://localhost:11434/api/embeddings"
+EMBED_MODEL = "nomic-embed-text"
+
+
+def _get_embedding(text: str) -> list[float]:
+    """调用 Ollama 获取文本 embedding"""
+    import urllib.request
+    req = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps({"model": EMBED_MODEL, "prompt": text}).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read())["embedding"]
+
+
+def _cosine_sim(a: list[float], b: list[float]) -> float:
+    """余弦相似度"""
+    import math
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a)) or 1.0
+    nb = math.sqrt(sum(x * x for x in b)) or 1.0
+    return dot / (na * nb)
+
+
+def load_few_shot_index() -> dict | None:
+    """加载 few-shot 库，预计算 embedding 和 SQL 骨架"""
     if not FEW_SHOT_PATH.exists():
         return None
     with open(FEW_SHOT_PATH) as f:
         pairs = json.load(f)
+
+    # 预计算 embedding 和 SQL 骨架
+    # embedding 缓存文件，避免重复调用
+    cache_path = FEW_SHOT_PATH.parent / ".generated" / "few_shot_embeddings.json"
+    cached = {}
+    if cache_path.exists():
+        with open(cache_path) as f:
+            cached = json.load(f)
+
+    updated = False
+    for p in pairs:
+        p["_skeleton"] = _extract_sql_skeleton(p["sql"])
+        if p["id"] in cached:
+            p["_embedding"] = cached[p["id"]]
+        else:
+            print(f"  Computing embedding for {p['id']}...")
+            p["_embedding"] = _get_embedding(p["question"])
+            cached[p["id"]] = p["_embedding"]
+            updated = True
+
+    if updated:
+        cache_path.parent.mkdir(exist_ok=True)
+        with open(cache_path, "w") as f:
+            json.dump(cached, f)
+
+    # 同时保留关键词索引作为 fallback
     for p in pairs:
         p["_keywords"] = _expand_keywords(p["question"])
-    return pairs
+
+    return {"pairs": pairs}
 
 
-def retrieve_few_shot(question: str, fs_index: list[dict], top_k: int = 3) -> list[dict]:
-    """Phase A6: 关键词相似度检索 top-k few-shot 示例"""
-    q_kw = _expand_keywords(question)
-    scored = []
-    for p in fs_index:
-        overlap = len(q_kw & p["_keywords"])
-        union = len(q_kw | p["_keywords"])
-        # Jaccard 相似度
-        score = overlap / union if union > 0 else 0
-        scored.append((score, p))
+def retrieve_few_shot(question: str, fs_index: dict, top_k: int = 3) -> list[dict]:
+    """Phase A6: Embedding 相似度 top 候选 + SQL 骨架多样性重排"""
+    pairs = fs_index["pairs"]
+
+    # Step 1: Embedding 余弦相似度，取 top 10 候选
+    try:
+        q_emb = _get_embedding(question)
+        scored = [(
+            _cosine_sim(q_emb, p["_embedding"]),
+            p
+        ) for p in pairs]
+    except Exception:
+        # Ollama 不可用时 fallback 到关键词匹配
+        q_kw = _expand_keywords(question)
+        scored = []
+        for p in pairs:
+            overlap = len(q_kw & p["_keywords"])
+            union = len(q_kw | p["_keywords"])
+            scored.append((overlap / union if union > 0 else 0, p))
+
     scored.sort(key=lambda x: -x[0])
-    return [{"question": s[1]["question"], "sql": s[1]["sql"]} for s in scored[:top_k]]
+    candidates = scored[:10]
+
+    if not candidates:
+        return []
+
+    # Step 2: SQL 骨架多样性贪心重排
+    selected = [candidates[0]]
+    used_skeletons = {candidates[0][1]["_skeleton"]}
+
+    for _ in range(top_k - 1):
+        best = None
+        best_score = -1
+        for sim, p in candidates:
+            if any(p["id"] == s[1]["id"] for s in selected):
+                continue
+            diversity_bonus = 0.3 if p["_skeleton"] not in used_skeletons else 0
+            combined = sim + diversity_bonus
+            if combined > best_score:
+                best_score = combined
+                best = (sim, p)
+        if best:
+            selected.append(best)
+            used_skeletons.add(best[1]["_skeleton"])
+
+    return [{"question": s[1]["question"], "sql": s[1]["sql"]} for s in selected]
 
 
 # ─── 完整 Pipeline ───
