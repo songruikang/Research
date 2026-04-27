@@ -92,6 +92,31 @@ async def health():
     return {"status": "ok"}
 
 
+_example_manager = None
+
+def get_example_manager():
+    global _example_manager
+    if _example_manager is None:
+        from chart_engine.examples import ExampleManager
+        _example_manager = ExampleManager(get_config())
+    return _example_manager
+
+
+@app.get("/examples")
+async def list_examples() -> list[dict]:
+    return get_example_manager().list()
+
+
+@app.get("/examples/{example_id}/chart")
+async def get_example_chart(example_id: str) -> dict:
+    try:
+        return get_example_manager().get_chart(example_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 def serve(host: str = "0.0.0.0", port: int = 8100):
     import uvicorn
     uvicorn.run(app, host=host, port=port)
