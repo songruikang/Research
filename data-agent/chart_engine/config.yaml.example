@@ -1,0 +1,22 @@
+# chart_engine/config.yaml.example
+llm:
+  model: ollama_chat/qwen3:32b
+  api_base: http://10.220.239.55:11343
+  timeout: 120
+  temperature: 0
+
+server:
+  host: 0.0.0.0
+  port: 8100
+
+examples:
+  few_shot_path: eval/few_shot_pairs.json
+  db_init_sql: telecom/output/telecom_init.sql
+
+profiler:
+  sample_size: 50
+  max_column_samples: 5
+
+selector:
+  pie_max_categories: 7
+  bar_max_categories: 20
