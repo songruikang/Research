@@ -18,12 +18,23 @@ def validate_and_fix(option, recommendation, profile, question, config):
     """校验 ECharts option 并自动修正常见问题。"""
     warnings = []
 
-    # KPI 卡片和表格直接放行（table=True 是主动选择，不是降级，fallback=False）
-    if option.get("kpi_card") or option.get("table"):
+    # KPI 卡片直接放行
+    if option.get("kpi_card"):
         return ChartResult(
             chart_type=recommendation.chart_type.value,
             echarts_option=option, reasoning=recommendation.reasoning,
             profile=profile, warnings=[], fallback=False,
+        )
+
+    # 表格：区分"主动选择"和"LLM 失败降级"
+    if option.get("table"):
+        is_fallback = recommendation.chart_type != ChartType.TABLE
+        return ChartResult(
+            chart_type=ChartType.TABLE.value,
+            echarts_option=option, reasoning=recommendation.reasoning,
+            profile=profile,
+            warnings=["LLM 生成失败，降级为表格"] if is_fallback else [],
+            fallback=is_fallback,
         )
 
     # 致命缺陷 → fallback 到表格
