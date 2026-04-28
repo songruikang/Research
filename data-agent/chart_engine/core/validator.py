@@ -29,11 +29,13 @@ def validate_and_fix(option, recommendation, profile, question, config):
     # 表格：区分"主动选择"和"LLM 失败降级"
     if option.get("table"):
         is_fallback = recommendation.chart_type != ChartType.TABLE
+        error_detail = option.get("_error", "")
+        fallback_msg = f"LLM 生成失败，降级为表格。{error_detail}" if is_fallback else ""
         return ChartResult(
             chart_type=ChartType.TABLE.value,
             echarts_option=option, reasoning=recommendation.reasoning,
             profile=profile,
-            warnings=["LLM 生成失败，降级为表格"] if is_fallback else [],
+            warnings=[fallback_msg] if fallback_msg else [],
             fallback=is_fallback,
         )
 

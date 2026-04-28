@@ -26,6 +26,8 @@ def generate_echarts(question, sql, data, profile, recommendation, config):
         profile=profile, recommendation=recommendation, sample_size=50,
     )
 
+    logger.info("LLM 调用: model=%s api_base=%s prompt_len=%d", config.model, config.api_base, len(user_prompt))
+
     try:
         response = litellm.completion(
             model=config.model,
@@ -39,16 +41,17 @@ def generate_echarts(question, sql, data, profile, recommendation, config):
             response_format={"type": "json_object"},
         )
         content = response.choices[0].message.content
+        logger.info("LLM 响应: len=%d", len(content))
         parsed = json.loads(content)
         if "option" in parsed:
             return parsed["option"]
         return parsed
     except json.JSONDecodeError as e:
-        logger.error("LLM 返回非法 JSON: %s", e)
-        return _build_table(data, profile)
+        logger.error("LLM 返回非法 JSON: %s — content=%s", e, content[:200] if content else "empty")
+        return {"table": True, "columns": [], "rows": [], "_error": f"LLM 返回非法 JSON: {e}"}
     except Exception as e:
-        logger.error("LLM 调用失败: %s", e)
-        return _build_table(data, profile)
+        logger.error("LLM 调用失败: %s (model=%s, api_base=%s)", e, config.model, config.api_base)
+        return {"table": True, "columns": [], "rows": [], "_error": f"LLM 调用失败: {e}"}
 
 
 def _build_kpi_card(question, data, rec):
