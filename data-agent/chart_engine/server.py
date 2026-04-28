@@ -40,34 +40,156 @@ class RecommendRequest(BaseModel):
     data: list[dict]
 
 
+class PipelineStep(BaseModel):
+    name: str
+    duration_ms: int
+    input: dict
+    output: dict
+
+
+class LLMTrace(BaseModel):
+    model: str = ""
+    system_prompt: str = ""
+    user_prompt: str = ""
+    response: str = ""
+    duration_ms: int = 0
+
+
 class ChartResponse(BaseModel):
     chart_type: str
     echarts_option: dict
     reasoning: str
     warnings: list[str]
     fallback: bool
+    pipeline: list[PipelineStep] = []
+    llm_trace: LLMTrace | None = None
 
 
 @app.post("/generate", response_model=ChartResponse)
 async def api_generate(req: GenerateRequest) -> ChartResponse:
-    try:
-        if req.mock:
-            # Mock 模式：不调 LLM，纯规则生成
-            from chart_engine.builder import build_echarts_from_data
-            from chart_engine.validator import validate_and_fix
+    import time
+    import json
 
-            config = get_config()
-            profile = profile_data(req.data, config.profiler)
-            rec = select_chart(profile, req.question, config.selector)
+    try:
+        pipeline_steps = []
+
+        # Step 1: Profiler
+        config = get_config()
+        t0 = time.time()
+        profile = profile_data(req.data, config.profiler)
+        t1 = time.time()
+
+        profile_output = {
+            "row_count": profile.row_count,
+            "col_count": profile.col_count,
+            "dimensions": profile.dimensions,
+            "measures": profile.measures,
+            "temporals": profile.temporals,
+            "columns": [
+                {
+                    "name": c.name,
+                    "dtype": c.dtype.value,
+                    "distinct_count": c.distinct_count,
+                    "is_dimension": c.is_dimension,
+                    "is_measure": c.is_measure,
+                    "time_granularity": c.time_granularity,
+                    "sample_values": c.sample_values[:3],
+                }
+                for c in profile.columns
+            ],
+        }
+        pipeline_steps.append(PipelineStep(
+            name="Profiler",
+            duration_ms=int((t1 - t0) * 1000),
+            input={"data_rows": len(req.data), "data_cols": len(req.data[0]) if req.data else 0},
+            output=profile_output,
+        ))
+
+        # Step 2: Selector
+        t0 = time.time()
+        rec = select_chart(profile, req.question, config.selector)
+        t1 = time.time()
+
+        selector_output = {
+            "chart_type": rec.chart_type.value,
+            "field_mapping": rec.field_mapping,
+            "reasoning": rec.reasoning,
+            "alternatives": [a.value for a in rec.alternatives],
+        }
+        pipeline_steps.append(PipelineStep(
+            name="Selector",
+            duration_ms=int((t1 - t0) * 1000),
+            input={"question": req.question, "profile_summary": f"{profile.row_count}行, dims={profile.dimensions}, measures={profile.measures}"},
+            output=selector_output,
+        ))
+
+        llm_trace = None
+
+        if req.mock:
+            # Step 3: Builder (mock)
+            from chart_engine.builder import build_echarts_from_data
+
+            t0 = time.time()
             raw_option = build_echarts_from_data(req.data, rec, req.question)
-            result = validate_and_fix(raw_option, rec, profile, req.question, config.selector)
+            t1 = time.time()
+
+            pipeline_steps.append(PipelineStep(
+                name="Builder (mock)",
+                duration_ms=int((t1 - t0) * 1000),
+                input={"chart_type": rec.chart_type.value, "field_mapping": rec.field_mapping},
+                output={"echarts_option_keys": list(raw_option.keys())},
+            ))
         else:
-            # LLM 模式：完整四步管线
-            result = generate_chart(req.question, req.sql, req.data)
+            # Step 3: Generator (LLM)
+            from chart_engine.prompts.echarts_gen import SYSTEM_PROMPT, build_user_prompt
+            from chart_engine.generator import generate_echarts
+
+            user_prompt = build_user_prompt(
+                question=req.question, sql=req.sql, data=req.data,
+                profile=profile, recommendation=rec, sample_size=50,
+            )
+
+            t0 = time.time()
+            raw_option = generate_echarts(req.question, req.sql, req.data, profile, rec, config.llm)
+            t1 = time.time()
+
+            llm_trace = LLMTrace(
+                model=config.llm.model,
+                system_prompt=SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+                response=json.dumps(raw_option, ensure_ascii=False, default=str),
+                duration_ms=int((t1 - t0) * 1000),
+            )
+
+            pipeline_steps.append(PipelineStep(
+                name="Generator (LLM)",
+                duration_ms=int((t1 - t0) * 1000),
+                input={"model": config.llm.model, "prompt_length": len(user_prompt)},
+                output={"echarts_option_keys": list(raw_option.keys()) if isinstance(raw_option, dict) else []},
+            ))
+
+        # Step 4: Validator
+        from chart_engine.validator import validate_and_fix
+
+        t0 = time.time()
+        result = validate_and_fix(raw_option, rec, profile, req.question, config.selector)
+        t1 = time.time()
+
+        pipeline_steps.append(PipelineStep(
+            name="Validator",
+            duration_ms=int((t1 - t0) * 1000),
+            input={"has_series": "series" in raw_option if isinstance(raw_option, dict) else False},
+            output={"chart_type": result.chart_type, "warnings": result.warnings, "fallback": result.fallback},
+        ))
 
         return ChartResponse(
-            chart_type=result.chart_type, echarts_option=result.echarts_option,
-            reasoning=result.reasoning, warnings=result.warnings, fallback=result.fallback,
+            chart_type=result.chart_type,
+            echarts_option=result.echarts_option,
+            reasoning=result.reasoning,
+            warnings=result.warnings,
+            fallback=result.fallback,
+            pipeline=pipeline_steps,
+            llm_trace=llm_trace,
         )
     except Exception as e:
         logger.error("生成图表失败: %s", e)
