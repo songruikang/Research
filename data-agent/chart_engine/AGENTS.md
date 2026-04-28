@@ -1,4 +1,4 @@
-# Chart Engine
+直接# Chart Engine
 
 SQL 查询结果 → ECharts option JSON 的独立图表生成模块。
 
