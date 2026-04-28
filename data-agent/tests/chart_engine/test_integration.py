@@ -3,8 +3,8 @@ import json
 from unittest.mock import patch, MagicMock
 
 from chart_engine import generate_chart
-from chart_engine.profiler import profile_data
-from chart_engine.selector import select_chart
+from chart_engine.core.profiler import profile_data
+from chart_engine.core.selector import select_chart
 from chart_engine.config import ProfilerConfig, SelectorConfig
 
 
@@ -33,7 +33,7 @@ class TestProfilerSelectorIntegration:
 
 
 class TestFullPipelineWithMockLLM:
-    @patch("chart_engine.generator.litellm")
+    @patch("chart_engine.core.generator.litellm")
     def test_bar_chart_full_pipeline(self, mock_litellm, categorical_data):
         mock_option = {
             "title": {"text": "各厂商设备数量"},

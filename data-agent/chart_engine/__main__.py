@@ -13,7 +13,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "serve":
     serve(host=args.host, port=args.port)
 
 elif len(sys.argv) > 1 and sys.argv[1] == "examples":
-    from chart_engine.examples import ExampleManager
+    from chart_engine.cli.examples import ExampleManager
     from chart_engine.config import load_config
     import argparse
 

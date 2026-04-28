@@ -1,6 +1,6 @@
 """Validator 单元测试。"""
-from chart_engine.validator import validate_and_fix
-from chart_engine.models import ChartType, ChartRecommendation, DataProfile, ColumnProfile, ColumnDType
+from chart_engine.core.validator import validate_and_fix
+from chart_engine.core.models import ChartType, ChartRecommendation, DataProfile, ColumnProfile, ColumnDType
 from chart_engine.config import SelectorConfig
 
 

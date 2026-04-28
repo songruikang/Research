@@ -11,7 +11,7 @@ server:
 
 examples:
   few_shot_path: eval/few_shot_pairs.json
-  db_init_sql: telecom/output/telecom_init.sql
+  db_path: telecom/output/telecom_nms.duckdb
 
 profiler:
   sample_size: 50

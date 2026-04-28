@@ -1,5 +1,5 @@
 """Chart Engine: SQL 查询结果 → ECharts option JSON。"""
-from chart_engine.models import ChartResult, ChartType, DataProfile
+from chart_engine.core.models import ChartResult, ChartType, DataProfile
 
 
 def generate_chart(
@@ -8,12 +8,12 @@ def generate_chart(
     data: list[dict],
     config_path: str | None = None,
 ) -> ChartResult:
-    """主入口：生成图表。"""
+    """主入口：生成图表（LLM 模式）。"""
     from chart_engine.config import load_config
-    from chart_engine.profiler import profile_data
-    from chart_engine.selector import select_chart
-    from chart_engine.generator import generate_echarts
-    from chart_engine.validator import validate_and_fix
+    from chart_engine.core.profiler import profile_data
+    from chart_engine.core.selector import select_chart
+    from chart_engine.core.generator import generate_echarts
+    from chart_engine.core.validator import validate_and_fix
 
     config = load_config(config_path)
     prof = profile_data(data, config.profiler)

@@ -8,8 +8,8 @@ from pydantic import BaseModel
 
 from chart_engine import generate_chart
 from chart_engine.config import load_config
-from chart_engine.profiler import profile_data
-from chart_engine.selector import select_chart
+from chart_engine.core.profiler import profile_data
+from chart_engine.core.selector import select_chart
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +127,7 @@ async def api_generate(req: GenerateRequest) -> ChartResponse:
 
         if req.mock:
             # Step 3: Builder (mock)
-            from chart_engine.builder import build_echarts_from_data
+            from chart_engine.core.builder import build_echarts_from_data
 
             t0 = time.time()
             raw_option = build_echarts_from_data(req.data, rec, req.question)
@@ -141,8 +141,8 @@ async def api_generate(req: GenerateRequest) -> ChartResponse:
             ))
         else:
             # Step 3: Generator (LLM)
-            from chart_engine.prompts.echarts_gen import SYSTEM_PROMPT, build_user_prompt
-            from chart_engine.generator import generate_echarts
+            from chart_engine.core.prompts.echarts_gen import SYSTEM_PROMPT, build_user_prompt
+            from chart_engine.core.generator import generate_echarts
 
             user_prompt = build_user_prompt(
                 question=req.question, sql=req.sql, data=req.data,
@@ -169,7 +169,7 @@ async def api_generate(req: GenerateRequest) -> ChartResponse:
             ))
 
         # Step 4: Validator
-        from chart_engine.validator import validate_and_fix
+        from chart_engine.core.validator import validate_and_fix
 
         t0 = time.time()
         result = validate_and_fix(raw_option, rec, profile, req.question, config.selector)
@@ -233,7 +233,7 @@ _example_manager = None
 def get_example_manager():
     global _example_manager
     if _example_manager is None:
-        from chart_engine.examples import ExampleManager
+        from chart_engine.cli.examples import ExampleManager
         _example_manager = ExampleManager(get_config())
     return _example_manager
 

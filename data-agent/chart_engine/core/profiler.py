@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from dateutil import parser as dateutil_parser
 
 from chart_engine.config import ProfilerConfig
-from chart_engine.models import ColumnProfile, ColumnDType, DataProfile
+from chart_engine.core.models import ColumnProfile, ColumnDType, DataProfile
 
 
 def profile_data(data: list[dict], config: ProfilerConfig) -> DataProfile:

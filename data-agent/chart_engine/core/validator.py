@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 
 from chart_engine.config import SelectorConfig
-from chart_engine.models import ChartType, ChartRecommendation, ChartResult, DataProfile
+from chart_engine.core.models import ChartType, ChartRecommendation, ChartResult, DataProfile
 
 logger = logging.getLogger(__name__)
 

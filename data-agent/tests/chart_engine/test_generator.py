@@ -2,11 +2,11 @@
 import json
 from unittest.mock import patch, MagicMock
 
-from chart_engine.generator import generate_echarts
-from chart_engine.profiler import profile_data
-from chart_engine.selector import select_chart
+from chart_engine.core.generator import generate_echarts
+from chart_engine.core.profiler import profile_data
+from chart_engine.core.selector import select_chart
 from chart_engine.config import LLMConfig, ProfilerConfig, SelectorConfig
-from chart_engine.models import ChartType
+from chart_engine.core.models import ChartType
 
 
 def _setup(data, question):
@@ -30,7 +30,7 @@ def test_table_fallback_no_llm():
     assert result["table"] is True
 
 
-@patch("chart_engine.generator.litellm")
+@patch("chart_engine.core.generator.litellm")
 def test_bar_chart_calls_llm(mock_litellm, categorical_data):
     expected_option = {
         "title": {"text": "各厂商设备数"},
@@ -51,7 +51,7 @@ def test_bar_chart_calls_llm(mock_litellm, categorical_data):
     assert result["series"][0]["type"] == "bar"
 
 
-@patch("chart_engine.generator.litellm")
+@patch("chart_engine.core.generator.litellm")
 def test_llm_returns_invalid_json_fallback_to_table(mock_litellm, categorical_data):
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
@@ -63,7 +63,7 @@ def test_llm_returns_invalid_json_fallback_to_table(mock_litellm, categorical_da
     assert result["table"] is True
 
 
-@patch("chart_engine.generator.litellm")
+@patch("chart_engine.core.generator.litellm")
 def test_llm_exception_fallback_to_table(mock_litellm, categorical_data):
     mock_litellm.completion.side_effect = Exception("connection timeout")
 

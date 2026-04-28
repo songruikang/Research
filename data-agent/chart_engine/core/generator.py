@@ -7,8 +7,8 @@ import logging
 import litellm
 
 from chart_engine.config import LLMConfig
-from chart_engine.models import DataProfile, ChartRecommendation, ChartType
-from chart_engine.prompts.echarts_gen import SYSTEM_PROMPT, build_user_prompt
+from chart_engine.core.models import DataProfile, ChartRecommendation, ChartType
+from chart_engine.core.prompts.echarts_gen import SYSTEM_PROMPT, build_user_prompt
 
 logger = logging.getLogger(__name__)
 

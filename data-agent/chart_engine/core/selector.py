@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 
 from chart_engine.config import SelectorConfig
-from chart_engine.models import ChartType, ChartRecommendation, DataProfile, ColumnDType
+from chart_engine.core.models import ChartType, ChartRecommendation, DataProfile, ColumnDType
 
 
 _PROPORTION_KEYWORDS = re.compile(r"占比|比例|分布|百分比|构成比")

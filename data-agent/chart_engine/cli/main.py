@@ -6,8 +6,8 @@ import json
 import sys
 
 from chart_engine.config import load_config
-from chart_engine.profiler import profile_data
-from chart_engine.selector import select_chart
+from chart_engine.core.profiler import profile_data
+from chart_engine.core.selector import select_chart
 
 
 def main(return_result: bool = False):

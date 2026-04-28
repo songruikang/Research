@@ -37,7 +37,7 @@ class SelectorConfig:
 @dataclass
 class ExamplesConfig:
     few_shot_path: str = "eval/few_shot_pairs.json"
-    db_init_sql: str = "telecom/output/telecom_init.sql"
+    db_path: str = "telecom/output/telecom_nms.duckdb"
 
 
 @dataclass

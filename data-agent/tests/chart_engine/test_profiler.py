@@ -1,7 +1,7 @@
 """Profiler 单元测试。"""
-from chart_engine.profiler import profile_data
+from chart_engine.core.profiler import profile_data
 from chart_engine.config import ProfilerConfig
-from chart_engine.models import ColumnDType
+from chart_engine.core.models import ColumnDType
 
 
 def test_time_series_profiling(time_series_data):

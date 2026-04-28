@@ -1,8 +1,8 @@
 """Selector 单元测试。"""
-from chart_engine.profiler import profile_data
-from chart_engine.selector import select_chart
+from chart_engine.core.profiler import profile_data
+from chart_engine.core.selector import select_chart
 from chart_engine.config import ProfilerConfig, SelectorConfig
-from chart_engine.models import ChartType
+from chart_engine.core.models import ChartType
 
 
 def _profile(data):

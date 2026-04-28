@@ -3,7 +3,7 @@ import json
 import tempfile
 from unittest.mock import patch
 
-from chart_engine.cli import main
+from chart_engine.cli.main import main
 
 
 def test_mock_mode(categorical_data):
