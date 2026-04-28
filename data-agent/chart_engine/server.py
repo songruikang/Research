@@ -28,6 +28,7 @@ class GenerateRequest(BaseModel):
     question: str
     sql: str = ""
     data: list[dict]
+    mock: bool = True  # 默认 mock 模式，不调 LLM
 
 
 class ProfileRequest(BaseModel):
@@ -50,7 +51,20 @@ class ChartResponse(BaseModel):
 @app.post("/generate", response_model=ChartResponse)
 async def api_generate(req: GenerateRequest) -> ChartResponse:
     try:
-        result = generate_chart(req.question, req.sql, req.data)
+        if req.mock:
+            # Mock 模式：不调 LLM，纯规则生成
+            from chart_engine.builder import build_echarts_from_data
+            from chart_engine.validator import validate_and_fix
+
+            config = get_config()
+            profile = profile_data(req.data, config.profiler)
+            rec = select_chart(profile, req.question, config.selector)
+            raw_option = build_echarts_from_data(req.data, rec, req.question)
+            result = validate_and_fix(raw_option, rec, profile, req.question, config.selector)
+        else:
+            # LLM 模式：完整四步管线
+            result = generate_chart(req.question, req.sql, req.data)
+
         return ChartResponse(
             chart_type=result.chart_type, echarts_option=result.echarts_option,
             reasoning=result.reasoning, warnings=result.warnings, fallback=result.fallback,
