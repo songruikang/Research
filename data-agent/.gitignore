@@ -18,3 +18,6 @@ wheels/
 
 # 生成文件（统一在 telecom/output/，脚本自动产出）
 telecom/output/
+
+# chart-engine 生成的示例输出
+chart_engine/examples_out/
