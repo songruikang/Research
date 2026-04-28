@@ -30,6 +30,7 @@ dependencies = [
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+testpaths = ["chart_engine/tests"]
 
 [dependency-groups]
 dev = [
