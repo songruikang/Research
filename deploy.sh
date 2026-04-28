@@ -29,6 +29,15 @@ AI_DIR="$WRENAI_ROOT/wren-ai-service"
 CHART_DIR="$PROJECT_ROOT/data-agent/chart_engine"
 COMPOSE_FILE="$DOCKER_DIR/docker-compose-dev.yaml"
 
+# ---- 用新镜像重建单个服务（rebuild 用） ----
+compose_recreate_service() {
+    local service=$1
+    info "用新镜像重建 $service..."
+    cd "$DOCKER_DIR"
+    docker compose -f "$COMPOSE_FILE" up -d --no-build --pull never "$service"
+    info "$service 已重建"
+}
+
 # ---- 代理配置 ----
 # Docker 桥接网关 IP（daemon.json 配的 172.20.0.0/16）
 DOCKER_BRIDGE_IP="172.20.0.1"
@@ -46,6 +55,7 @@ NC='\033[0m'
 info()  { echo -e "${GREEN}>>>${NC} $1"; }
 warn()  { echo -e "${YELLOW}>>>${NC} $1"; }
 error() { echo -e "${RED}>>>${NC} $1"; exit 1; }
+step()  { echo -e "\n${GREEN}────────────────────────────────────────${NC}"; echo -e "${GREEN}[$1]${NC} $2"; echo -e "${GREEN}────────────────────────────────────────${NC}"; }
 
 # ---- 前置检查 ----
 preflight() {
@@ -69,38 +79,67 @@ preflight() {
 # ---- 构建 ----
 build_ui() {
     preflight
-    info "构建 wren-ui 镜像（使用 Dockerfile.cloud）..."
+    step "BUILD" "wren-ui 镜像（Dockerfile.cloud）"
+    info "目录: $UI_DIR"
+    info "命令: DOCKER_BUILDKIT=0 docker build --build-arg HTTP_PROXY=$PROXY_URL --build-arg HTTPS_PROXY=$PROXY_URL -t wrenai-wren-ui:latest -f Dockerfile.cloud ."
     cd "$UI_DIR"
     DOCKER_BUILDKIT=0 docker build \
         --build-arg HTTP_PROXY=$PROXY_URL \
         --build-arg HTTPS_PROXY=$PROXY_URL \
         -t wrenai-wren-ui:latest \
         -f Dockerfile.cloud .
-    info "wren-ui 构建完成"
+    info "wren-ui 构建完成 ✓"
 }
 
 build_ai() {
     preflight
-    info "构建 wren-ai-service 镜像（使用 Dockerfile.cloud）..."
+    step "BUILD" "wren-ai-service 镜像（Dockerfile.cloud）"
+    info "目录: $AI_DIR"
+    info "命令: DOCKER_BUILDKIT=0 docker build --build-arg HTTP_PROXY=$PROXY_URL --build-arg HTTPS_PROXY=$PROXY_URL -t wrenai-wren-ai-service:latest -f docker/Dockerfile.cloud ."
     cd "$AI_DIR"
     DOCKER_BUILDKIT=0 docker build \
         --build-arg HTTP_PROXY=$PROXY_URL \
         --build-arg HTTPS_PROXY=$PROXY_URL \
         -t wrenai-wren-ai-service:latest \
         -f docker/Dockerfile.cloud .
-    info "wren-ai-service 构建完成"
+    info "wren-ai-service 构建完成 ✓"
+}
+
+install_ui_deps() {
+    preflight
+    step "INSTALL-DEPS" "wren-ui node_modules（Node 18 容器 + --network host）"
+    cd "$UI_DIR"
+    docker run --rm \
+      --network host \
+      -v "$(pwd)":/app -w /app \
+      -e NODE_TLS_REJECT_UNAUTHORIZED=0 \
+      node:18-bookworm-slim \
+      sh -c '
+        node .yarn/releases/yarn-4.5.3.cjs config set httpProxy http://127.0.0.1:3128 && \
+        node .yarn/releases/yarn-4.5.3.cjs config set httpsProxy http://127.0.0.1:3128 && \
+        node .yarn/releases/yarn-4.5.3.cjs config set enableStrictSsl false && \
+        node .yarn/releases/yarn-4.5.3.cjs install
+      '
+    # 确认关键依赖
+    if [ -d "node_modules/echarts" ] && [ -d "node_modules/next" ]; then
+        info "node_modules 安装完成，关键依赖已确认"
+    else
+        error "node_modules 安装不完整，请检查网络"
+    fi
 }
 
 build_chart() {
     preflight
-    info "构建 chart-engine 镜像..."
+    step "BUILD" "chart-engine 镜像（Dockerfile）"
+    info "目录: $CHART_DIR"
+    info "命令: DOCKER_BUILDKIT=0 docker build --build-arg HTTP_PROXY=$PROXY_URL --build-arg HTTPS_PROXY=$PROXY_URL -t chart-engine:latest -f Dockerfile ."
     cd "$CHART_DIR"
     DOCKER_BUILDKIT=0 docker build \
         --build-arg HTTP_PROXY=$PROXY_URL \
         --build-arg HTTPS_PROXY=$PROXY_URL \
         -t chart-engine:latest \
         -f Dockerfile .
-    info "chart-engine 构建完成"
+    info "chart-engine 构建完成 ✓"
 }
 
 # ---- Compose 操作 ----
@@ -259,6 +298,15 @@ except Exception as e:
         echo -e "  ${YELLOW}!${NC} .env 不存在"
     fi
 
+    # 9. 代理路由
+    echo ""
+    echo "9. 代理路由"
+    if ip route show | grep -q "172.18.215.0"; then
+        echo -e "  ${GREEN}✓${NC} 代理路由 172.18.215.0/24 存在"
+    else
+        echo -e "  ${RED}✗${NC} 代理路由缺失 — route add -net 172.18.215.0 netmask 255.255.255.0 gw 7.182.8.1 dev eth0"
+    fi
+
     echo ""
     echo "============================================================"
 }
@@ -296,22 +344,33 @@ case "${1:-help}" in
     rebuild)
         case "${2:-all}" in
             ui)
+                step "REBUILD 1/2" "构建 wren-ui 镜像"
                 build_ui
-                compose_restart_service "wren-ui"
+                step "REBUILD 2/2" "用新镜像重建 wren-ui 容器"
+                compose_recreate_service "wren-ui"
                 ;;
             ai)
+                step "REBUILD 1/2" "构建 wren-ai-service 镜像"
                 build_ai
-                compose_restart_service "wren-ai-service"
+                step "REBUILD 2/2" "用新镜像重建 wren-ai-service 容器"
+                compose_recreate_service "wren-ai-service"
                 ;;
             chart)
+                step "REBUILD 1/2" "构建 chart-engine 镜像"
                 build_chart
-                compose_restart_service "chart-engine"
+                step "REBUILD 2/2" "用新镜像重建 chart-engine 容器"
+                compose_recreate_service "chart-engine"
                 ;;
             all)
+                step "REBUILD 1/5" "构建 wren-ui 镜像"
                 build_ui
+                step "REBUILD 2/5" "构建 wren-ai-service 镜像"
                 build_ai
+                step "REBUILD 3/5" "构建 chart-engine 镜像"
                 build_chart
+                step "REBUILD 4/5" "停止所有服务"
                 compose_down
+                step "REBUILD 5/5" "用新镜像启动所有服务"
                 compose_up
                 ;;
             *)
@@ -336,6 +395,10 @@ case "${1:-help}" in
         info "清理完成"
         ;;
 
+    install-deps)
+        install_ui_deps
+        ;;
+
     check)
         check_network
         ;;
@@ -349,18 +412,20 @@ case "${1:-help}" in
         echo "  build [ui|ai|chart|all]  构建镜像（默认 all）"
         echo "  up                       启动所有服务"
         echo "  down                     停止所有服务"
-        echo "  restart [ui|ai|...]      重启服务（默认全部）"
-        echo "  rebuild [ui|ai|chart|all] 构建 + 重启（最常用）"
+        echo "  restart [ui|ai|...]      重启服务（不换镜像）"
+        echo "  rebuild [ui|ai|chart|all] 构建 + 用新镜像重建（最常用）"
+        echo "  install-deps             安装 wren-ui node_modules（新依赖后用）"
         echo "  logs [ui|ai|chart|...]   查看日志"
         echo "  status                   查看服务状态"
         echo "  clean                    清理悬空镜像/容器"
-        echo "  check                    网络诊断"
+        echo "  check                    网络诊断（含代理路由）"
         echo ""
         echo "日常操作:"
         echo "  bash deploy.sh rebuild ui      # 改了前端代码"
         echo "  bash deploy.sh rebuild ai      # 改了 AI service"
         echo "  bash deploy.sh rebuild chart   # 改了 chart-engine"
         echo "  bash deploy.sh rebuild all     # 全部重建"
+        echo "  bash deploy.sh install-deps    # 新 npm 依赖后装 node_modules"
         echo "  bash deploy.sh logs ai         # 看 AI service 日志"
         echo "  bash deploy.sh check           # 网络不通时排查"
         ;;
